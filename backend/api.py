@@ -20,6 +20,7 @@ from models import (GenerationRequest, GenerationResponse, HypnosisText,
 from music import generate_music_bed
 from prompts import build_prompt
 from tts import synthesize_tts_cached
+from supabase_storage import build_default_catalog, storage_enabled
 
 router = APIRouter()
 
@@ -177,6 +178,19 @@ async def debug_gemini_models():
     Retourne la liste des modèles Gemini visibles par la clé (ne renvoie pas la clé).
     """
     return await list_gemini_models()
+
+
+@router.get("/cloud-audio/catalog")
+def cloud_audio_catalog():
+    """
+    Retourne un petit catalogue d'URLs audio "cloud" (Supabase Storage) si configuré.
+    - Ne renvoie jamais les secrets (service key).
+    - Fournit des URLs signées (bucket privé).
+    Le frontend peut utiliser ces URLs comme fallback/priorité par rapport à /library (local).
+    """
+    if not storage_enabled():
+        return {"enabled": False, "music": {}, "ambiences": {}}
+    return build_default_catalog()
 
 
 @router.get("/admin/wellbeing_events")

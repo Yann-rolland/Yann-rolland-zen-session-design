@@ -19,9 +19,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { useApp } from "@/contexts/AppContext";
 import { cn } from "@/lib/utils";
 import { Session, SessionConfig, SessionPhase } from "@/types";
-import { Sparkles, Wand2 } from "lucide-react";
+import { Sparkles, Wand2, Zap } from "lucide-react";
 import * as React from "react";
 import { SessionConfigPanel } from "./SessionConfig";
+import { PRESETS, applyPresetToConfig } from "@/lib/presets";
 
 interface CreateSessionFormProps {
   onSessionCreated: (session: Session) => void;
@@ -52,38 +53,35 @@ export function CreateSessionForm({ onSessionCreated, className }: CreateSession
     return "local" as const;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!prompt.trim()) return;
-
+  const runGeneration = async (opts: { prompt: string; objectif: BackendObjectif; style: BackendStyle; config: SessionConfig }) => {
     setIsGenerating(true);
     setError("");
 
     try {
       const resp = await generateSession({
-        objectif,
-        duree_minutes: config.duration,
-        style,
-        llm_provider: mapLLMProvider(config.llmProvider),
-        tts_provider: mapTTSProvider(config.ttsProvider),
+        objectif: opts.objectif,
+        duree_minutes: opts.config.duration,
+        style: opts.style,
+        llm_provider: mapLLMProvider(opts.config.llmProvider),
+        tts_provider: mapTTSProvider(opts.config.ttsProvider),
         mixdown: true,
-        voice_volume: Math.max(0, Math.min(2, (config.voiceVolume ?? 80) / 100)),
-        music_volume: config.playMusic ? Math.max(0, Math.min(2, (config.musicVolume ?? 40) / 100)) : 0,
+        voice_volume: Math.max(0, Math.min(2, (opts.config.voiceVolume ?? 80) / 100)),
+        music_volume: opts.config.playMusic ? Math.max(0, Math.min(2, (opts.config.musicVolume ?? 40) / 100)) : 0,
         binaural_volume:
-          !config.playBinaural || config.binauralType === "none"
+          !opts.config.playBinaural || opts.config.binauralType === "none"
             ? 0
-            : Math.max(0, Math.min(2, (config.binauralVolume ?? 30) / 100)),
+            : Math.max(0, Math.min(2, (opts.config.binauralVolume ?? 30) / 100)),
         binaural_band:
-          !config.playBinaural || config.binauralType === "none"
+          !opts.config.playBinaural || opts.config.binauralType === "none"
             ? "auto"
-            : (config.binauralType as any),
+            : (opts.config.binauralType as any),
         binaural_beat_hz: 0,
         voice_offset_s: 0,
         music_offset_s: 0,
         binaural_offset_s: 0,
       });
 
-      const totalSec = Math.max(60, config.duration * 60);
+      const totalSec = Math.max(60, opts.config.duration * 60);
       const pre = 10;
       const post = 10;
       const core = Math.max(30, totalSec - pre - post);
@@ -103,12 +101,12 @@ export function CreateSessionForm({ onSessionCreated, className }: CreateSession
 
       const session: Session = {
         id: resp.run_id || Date.now().toString(),
-        title: prompt.slice(0, 50) + (prompt.length > 50 ? "..." : ""),
-        description: prompt,
+        title: opts.prompt.slice(0, 50) + (opts.prompt.length > 50 ? "..." : ""),
+        description: opts.prompt,
         createdAt: new Date(),
         duration: totalSec,
         phases,
-        config,
+        config: opts.config,
         audio: {
           voiceUrl: assetUrl(resp.tts_audio_path),
           musicUrl: assetUrl(resp.music_path),
@@ -126,10 +124,10 @@ export function CreateSessionForm({ onSessionCreated, className }: CreateSession
         phaseProgress: 0,
         isPlaying: false,
         volumes: {
-          voice: config.voiceVolume ?? 80,
-          music: config.musicVolume ?? 40,
-          binaural: config.binauralVolume ?? 30,
-          ambiance: config.ambianceVolume ?? 25,
+          voice: opts.config.voiceVolume ?? 80,
+          music: opts.config.musicVolume ?? 40,
+          binaural: opts.config.binauralVolume ?? 30,
+          ambiance: opts.config.ambianceVolume ?? 25,
         },
       });
 
@@ -148,8 +146,55 @@ export function CreateSessionForm({ onSessionCreated, className }: CreateSession
     }
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!prompt.trim()) return;
+    await runGeneration({ prompt: prompt.trim(), objectif, style, config });
+  };
+
+  const handlePreset = async (presetId: BackendObjectif) => {
+    if (isGenerating) return;
+    const preset = PRESETS.find((p) => p.id === presetId);
+    if (!preset) return;
+    const nextConfig = applyPresetToConfig(config, preset);
+    // Met à jour l'UI immédiatement
+    setConfig(nextConfig);
+    setObjectif(preset.objectif);
+    setStyle(preset.style);
+    setPrompt(preset.prompt);
+    await runGeneration({ prompt: preset.prompt, objectif: preset.objectif, style: preset.style, config: nextConfig });
+  };
+
   return (
     <form onSubmit={handleSubmit} className={cn("space-y-6", className)}>
+      {/* 1-click presets */}
+      <GlassCard padding="lg">
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Zap className="w-5 h-5 text-primary" />
+            <div className="text-base font-medium">Sessions 1‑clic</div>
+          </div>
+          <div className="text-sm text-muted-foreground">
+            Lance une session instantanément: les réglages audio sont appliqués automatiquement.
+          </div>
+          <div className="grid gap-3 md:grid-cols-5">
+            {PRESETS.map((p) => (
+              <Button
+                key={p.id}
+                type="button"
+                variant="secondary"
+                onClick={() => handlePreset(p.id)}
+                disabled={isGenerating}
+                className="h-auto py-3 flex flex-col items-start gap-1"
+              >
+                <div className="font-semibold">{p.title}</div>
+                <div className="text-xs text-muted-foreground">{p.subtitle}</div>
+              </Button>
+            ))}
+          </div>
+        </div>
+      </GlassCard>
+
       {/* Prompt Input */}
       <GlassCard padding="lg">
         <div className="space-y-4">

@@ -202,6 +202,25 @@ export async function saveClientState(deviceId: string, state: any): Promise<{ o
   return res.json();
 }
 
+export interface CloudAudioCatalog {
+  enabled: boolean;
+  bucket?: string | null;
+  signed_expires_in?: number;
+  music: Record<string, string>;
+  ambiences: Record<string, string>;
+}
+
+export async function getCloudAudioCatalog(): Promise<CloudAudioCatalog> {
+  const base = getApiBase();
+  const url = joinUrl(base, "/cloud-audio/catalog");
+  const res = await fetch(url, { method: "GET" });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
+  }
+  return res.json();
+}
+
 export interface AdminWellbeingEvent {
   id: string;
   device_id: string;

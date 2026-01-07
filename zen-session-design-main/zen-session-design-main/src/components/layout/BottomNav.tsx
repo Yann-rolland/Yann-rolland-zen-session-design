@@ -1,8 +1,7 @@
-import * as React from "react";
-import { NavLink, useLocation } from "react-router-dom";
-import { cn } from "@/lib/utils";
-import { Home, Clock, Settings, User, Shield } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { cn } from "@/lib/utils";
+import { Clock, Home, Settings, Shield, User } from "lucide-react";
+import { NavLink, useLocation } from "react-router-dom";
 
 const navItems = [
   { to: "/", icon: Home, label: "Accueil" },

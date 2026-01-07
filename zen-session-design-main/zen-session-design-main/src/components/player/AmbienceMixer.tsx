@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/collapsible";
 import { MUSIC_TRACKS, musicFileForId } from "@/audio/musicLibrary";
 import { makeNoiseBuffer, rampGain } from "@/audio/noiseGenerators";
-import { libraryUrl } from "@/api/hypnoticApi";
+import { getCloudAudioCatalog, libraryUrl } from "@/api/hypnoticApi";
 import { AmbianceType, BinauralType, MusicTrackId, SessionConfig } from "@/types";
 import { ChevronDown, ChevronUp, Music2, Cloud, Waves } from "lucide-react";
 
@@ -68,6 +68,7 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
 
   const [isPlaying, setIsPlaying] = React.useState(false);
   const [error, setError] = React.useState<string>("");
+  const [cloudCatalog, setCloudCatalog] = React.useState<{ music: Record<string, string>; ambiences: Record<string, string> } | null>(null);
   const stopTimeoutRef = React.useRef<number | null>(null);
   const stopTokenRef = React.useRef<number>(0);
 
@@ -79,10 +80,31 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
   const binauralGainRef = React.useRef<GainNode | null>(null);
 
   const musicElRef = React.useRef<HTMLAudioElement | null>(null);
+  const ambienceElRef = React.useRef<HTMLAudioElement | null>(null);
   const binauralElRef = React.useRef<HTMLAudioElement | null>(null);
   const musicNodeRef = React.useRef<MediaElementAudioSourceNode | null>(null);
+  const ambienceNodeRef = React.useRef<MediaElementAudioSourceNode | null>(null);
   const binauralNodeRef = React.useRef<MediaElementAudioSourceNode | null>(null);
   const noiseSrcRef = React.useRef<AudioBufferSourceNode | null>(null);
+
+  // Load cloud audio catalog (optional) - fallback to local /library if not configured.
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const cat = await getCloudAudioCatalog();
+        if (!alive) return;
+        if (cat?.enabled) setCloudCatalog({ music: cat.music || {}, ambiences: cat.ambiences || {} });
+        else setCloudCatalog({ music: {}, ambiences: {} });
+      } catch {
+        if (!alive) return;
+        setCloudCatalog({ music: {}, ambiences: {} });
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // Reset UI state when session/config changes (but keep user tweaks while playing)
   React.useEffect(() => {
@@ -142,6 +164,15 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
     noiseSrcRef.current = null;
   };
 
+  const stopAmbienceTrack = () => {
+    try {
+      ambienceElRef.current?.pause();
+      if (ambienceElRef.current) ambienceElRef.current.currentTime = 0;
+    } catch {
+      // ignore
+    }
+  };
+
   const fadeOutMs = Math.max(0, Math.min(60_000, Math.round((Number(initialConfig.fadeOutDuration) || 10) * 1000)));
 
   const clearStopTimeout = () => {
@@ -170,6 +201,7 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
       // Si l'utilisateur a relancé Play entre-temps, on ne coupe pas la nouvelle lecture.
       if (stopTokenRef.current !== token) return;
       stopNoise();
+      stopAmbienceTrack();
       try {
         musicElRef.current?.pause();
         if (musicElRef.current) musicElRef.current.currentTime = 0;
@@ -201,7 +233,8 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
       musicElRef.current.preload = "auto";
     }
     const file = musicFileForId(musicTrackId);
-    const src = libraryUrl(`/library/music/user/${file}`);
+    const cloudSrc = cloudCatalog?.music?.[musicTrackId];
+    const src = cloudSrc || libraryUrl(`/library/music/user/${file}`);
     musicElRef.current.crossOrigin = "anonymous";
     musicElRef.current.src = src;
     musicElRef.current.loop = true;
@@ -238,6 +271,26 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
     if (!ctx || !gain) return;
 
     stopNoise();
+
+    // Prefer a cloud ambience track if available (same ambianceType key)
+    const cloudSrc = cloudCatalog?.ambiences?.[ambianceType];
+    if (cloudSrc) {
+      if (!ambienceElRef.current) {
+        ambienceElRef.current = new Audio();
+        ambienceElRef.current.preload = "auto";
+      }
+      ambienceElRef.current.crossOrigin = "anonymous";
+      ambienceElRef.current.src = cloudSrc;
+      ambienceElRef.current.loop = true;
+      if (!ambienceNodeRef.current) {
+        ambienceNodeRef.current = ctx.createMediaElementSource(ambienceElRef.current);
+        ambienceNodeRef.current.connect(gain);
+      }
+      return;
+    }
+
+    // Fallback: generated noise buffer
+    stopAmbienceTrack();
     const buf = makeNoiseBuffer(ctx, ambianceType);
     if (!buf) return;
     const src = ctx.createBufferSource();
@@ -269,11 +322,16 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
 
       if (playNoise && ambianceType !== "none") {
         await buildNoise();
-        noiseSrcRef.current?.start?.();
+        if (noiseSrcRef.current) {
+          noiseSrcRef.current.start?.();
+        } else {
+          await ambienceElRef.current?.play?.();
+        }
         rampGain(noiseGainRef.current, noiseVol, 1500);
       } else {
         rampGain(noiseGainRef.current, 0, 200);
         stopNoise();
+        stopAmbienceTrack();
       }
 
       if (playBinaural && binauralUrl && binauralType !== "none") {
@@ -324,7 +382,11 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
     (async () => {
       try {
         await buildNoise();
-        noiseSrcRef.current?.start?.();
+        if (noiseSrcRef.current) {
+          noiseSrcRef.current.start?.();
+        } else {
+          await ambienceElRef.current?.play?.();
+        }
       } catch (e: any) {
         setError(e?.message || String(e));
       }

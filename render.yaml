@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: bn3-backend
+    env: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r ../requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 8006
+      # Add these in Render dashboard (do not commit real secrets):
+      # - DATABASE_URL (pooler + sslmode=require)
+      # - ADMIN_TOKEN
+      # - CORS_ORIGINS (your Vercel domain)
+      # Optional:
+      # - GEMINI_API_KEY
+      # - SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / SUPABASE_STORAGE_BUCKET
+
+

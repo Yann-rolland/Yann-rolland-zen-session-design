@@ -127,3 +127,60 @@ cd D:\BN-3\zen-session-design-main\zen-session-design-main
 .\run.ps1
 ```
 
+## Étape 3 (Cloud ambiances) — Supabase Storage
+Le backend peut streamer musique + ambiances depuis **Supabase Storage** (bucket privé) via des **URLs signées**.
+
+### 1) Créer le bucket
+Dans Supabase → Storage:
+- crée un bucket privé (ex: `bn3-audio`)
+- upload tes fichiers aux chemins suivants:
+  - `music/user/slowlife.mp3`
+  - `music/user/slowmotion.mp3`
+  - `music/user/yesterday.mp3`
+  - `music/user/dawnofchange.mp3`
+  - `ambiences/rain.mp3`
+  - `ambiences/forest.mp3`
+  - `ambiences/ocean.mp3`
+  - `ambiences/wind.mp3`
+  - `ambiences/fire.mp3`
+  - `ambiences/pink-noise.mp3`
+
+### 2) Configurer le backend (local)
+Dans `backend/env.local` (non versionné), ajoute:
+
+```env
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<service_role_key>
+SUPABASE_STORAGE_BUCKET=bn3-audio
+SUPABASE_SIGNED_URL_EXPIRES=3600
+```
+
+### 3) Vérifier
+- `GET http://127.0.0.1:8006/cloud-audio/catalog` doit retourner `enabled:true` et des URLs dans `music` / `ambiences`.
+- Le frontend utilisera automatiquement le cloud si dispo (sinon fallback `/library` local).
+
+## Déploiement (prod)
+
+### Backend (Render)
+Ce repo inclut un `render.yaml` prêt à l'emploi.
+
+- **Root directory**: `backend`
+- **Build**: `pip install -r ../requirements.txt`
+- **Start**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+
+Variables Render à définir:
+- `DATABASE_URL` (pooler + `?sslmode=require`)
+- `ADMIN_TOKEN`
+- `CORS_ORIGINS` = `https://<ton-frontend-vercel>.vercel.app`
+- (optionnel) `GEMINI_API_KEY`
+- (optionnel) `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET`
+
+### Frontend (Vercel)
+Le frontend Lovable est dans `zen-session-design-main/zen-session-design-main` (avec un `vercel.json`).
+
+Dans Vercel:
+- **Root Directory**: `zen-session-design-main/zen-session-design-main`
+- **Build Command**: `npm run build`
+- **Output Directory**: `dist`
+- **Environment**: `VITE_API_BASE=https://<ton-backend-render>.onrender.com`
+
