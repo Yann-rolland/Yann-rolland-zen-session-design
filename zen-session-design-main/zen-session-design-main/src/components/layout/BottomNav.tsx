@@ -1,0 +1,70 @@
+import * as React from "react";
+import { NavLink, useLocation } from "react-router-dom";
+import { cn } from "@/lib/utils";
+import { Home, Clock, Settings, User, Shield } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+
+const navItems = [
+  { to: "/", icon: Home, label: "Accueil" },
+  { to: "/history", icon: Clock, label: "Historique" },
+  { to: "/settings", icon: Settings, label: "Réglages" },
+];
+
+export function BottomNav() {
+  const location = useLocation();
+  const { isAuthenticated } = useAuth();
+
+  // Le lien "Admin" est visible pour les utilisateurs connectés.
+  // L'accès réel aux données reste protégé par ADMIN_TOKEN côté backend.
+  const allNavItems = isAuthenticated
+    ? [...navItems, { to: "/admin/insights", icon: Shield, label: "Admin" }]
+    : navItems;
+
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden">
+      <div className="glass-card border-t border-border rounded-none safe-bottom">
+        <div className="flex items-center justify-around h-16">
+          {allNavItems.map((item) => {
+            const isActive = location.pathname === item.to;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={cn(
+                  "flex flex-col items-center justify-center flex-1 h-full py-2",
+                  "transition-all duration-200",
+                  isActive ? "text-primary" : "text-muted-foreground"
+                )}
+              >
+                <item.icon className={cn(
+                  "w-5 h-5 mb-1 transition-transform duration-200",
+                  isActive && "scale-110"
+                )} />
+                <span className="text-[10px] font-medium">{item.label}</span>
+              </NavLink>
+            );
+          })}
+          
+          <NavLink
+            to={isAuthenticated ? "/account" : "/login"}
+            className={cn(
+              "flex flex-col items-center justify-center flex-1 h-full py-2",
+              "transition-all duration-200",
+              (location.pathname === "/login" || location.pathname === "/account")
+                ? "text-primary"
+                : "text-muted-foreground"
+            )}
+          >
+            <User className={cn(
+              "w-5 h-5 mb-1 transition-transform duration-200",
+              (location.pathname === "/login" || location.pathname === "/account") && "scale-110"
+            )} />
+            <span className="text-[10px] font-medium">
+              {isAuthenticated ? "Compte" : "Connexion"}
+            </span>
+          </NavLink>
+        </div>
+      </div>
+    </nav>
+  );
+}
