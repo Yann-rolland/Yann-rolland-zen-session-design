@@ -186,6 +186,7 @@ export default function AdminInsights() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Reçu</TableHead>
+                  <TableHead>Utilisateur</TableHead>
                   <TableHead>Device</TableHead>
                   <TableHead>Rating</TableHead>
                   <TableHead>Tag</TableHead>
@@ -197,6 +198,12 @@ export default function AdminInsights() {
                   <TableRow key={e.id}>
                     <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                       {new Date(e.received_at).toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      <div className="truncate max-w-[240px]">
+                        {e.user_email || "—"}
+                      </div>
+                      {e.user_id && <div className="text-[10px] text-muted-foreground font-mono truncate max-w-[240px]">{e.user_id}</div>}
                     </TableCell>
                     <TableCell className="text-xs font-mono">{e.device_id}</TableCell>
                     <TableCell>
@@ -210,7 +217,7 @@ export default function AdminInsights() {
                 ))}
                 {hasToken && eventsQuery.data && (eventsQuery.data.events?.length || 0) === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-sm text-muted-foreground">
+                    <TableCell colSpan={6} className="text-sm text-muted-foreground">
                       Aucun événement sur cette période.
                     </TableCell>
                   </TableRow>

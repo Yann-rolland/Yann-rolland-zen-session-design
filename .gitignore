@@ -65,6 +65,8 @@ assets/runs/
 assets/cache/
 assets/tts_cache/
 assets/state/
+assets/feedback/
+assets/exports/
 
 # Audio outputs / temporary files
 assets/audio/
@@ -77,6 +79,9 @@ library/**
 
 # Old embedded copy of the Lovable project under assets (should not be versioned)
 assets/zen-session-design-main/
+
+# Vite local cache (generated)
+zen-session-design-main/.vite/
 
 # Legacy frontend build artifacts/backups
 frontend/dist/

@@ -129,6 +129,9 @@ class WellBeingFeedback(BaseModel):
     """
     id: str = Field(default="", max_length=128)
     device_id: str = Field(default="", max_length=128)
+    # Supabase Auth identity (required): we link each event to a user profile
+    user_id: str = Field(min_length=1, max_length=64)
+    user_email: str = Field(min_length=3, max_length=320)
     at: str
     rating: float = Field(ge=1.0, le=5.0)
     tag: str = Field(default="autre", max_length=32)

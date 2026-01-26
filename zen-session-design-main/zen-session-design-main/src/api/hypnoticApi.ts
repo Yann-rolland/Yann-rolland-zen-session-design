@@ -109,6 +109,18 @@ function joinUrl(base: string, path: string): string {
   return `${b}/${p}`;
 }
 
+async function authHeader(): Promise<Record<string, string>> {
+  try {
+    const { supabase } = await import("@/lib/supabaseClient");
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return {};
+    return { Authorization: `Bearer ${token}` };
+  } catch {
+    return {};
+  }
+}
+
 export function assetUrl(path: string): string {
   return joinUrl(getApiBase(), path);
 }
@@ -123,7 +135,8 @@ export function libraryUrl(path: string): string {
 export async function listRuns(limit = 50): Promise<RunsListResponse> {
   const base = getApiBase();
   const url = joinUrl(base, `/runs?limit=${encodeURIComponent(String(limit))}`);
-  const res = await fetch(url, { method: "GET" });
+  const headers = await authHeader();
+  const res = await fetch(url, { method: "GET", headers });
   if (!res.ok) {
     const msg = await res.text().catch(() => "");
     throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
@@ -134,7 +147,8 @@ export async function listRuns(limit = 50): Promise<RunsListResponse> {
 export async function getRun(runId: string): Promise<RunDetailResponse> {
   const base = getApiBase();
   const url = joinUrl(base, `/runs/${encodeURIComponent(runId)}`);
-  const res = await fetch(url, { method: "GET" });
+  const headers = await authHeader();
+  const res = await fetch(url, { method: "GET", headers });
   if (!res.ok) {
     const msg = await res.text().catch(() => "");
     throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
@@ -145,7 +159,8 @@ export async function getRun(runId: string): Promise<RunDetailResponse> {
 export async function deleteRun(runId: string): Promise<{ deleted: string }> {
   const base = getApiBase();
   const url = joinUrl(base, `/runs/${encodeURIComponent(runId)}`);
-  const res = await fetch(url, { method: "DELETE" });
+  const headers = await authHeader();
+  const res = await fetch(url, { method: "DELETE", headers });
   if (!res.ok) {
     const msg = await res.text().catch(() => "");
     throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
@@ -156,6 +171,8 @@ export async function deleteRun(runId: string): Promise<{ deleted: string }> {
 export async function sendWellBeingFeedback(payload: {
   id: string;
   device_id: string;
+  user_id: string;
+  user_email: string;
   at: string;
   rating: number;
   tag: string;
@@ -164,9 +181,10 @@ export async function sendWellBeingFeedback(payload: {
 }): Promise<{ ok: boolean }> {
   const base = getApiBase();
   const url = joinUrl(base, "/feedback/wellbeing");
+  const auth = await authHeader();
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...auth },
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
@@ -178,6 +196,20 @@ export async function sendWellBeingFeedback(payload: {
 
 export async function getClientState(deviceId: string): Promise<{ device_id: string; state: any; stored?: string }> {
   const base = getApiBase();
+  const auth = await authHeader();
+  // If authenticated, use per-user state endpoint (isolates progress/settings/history per user)
+  if (Object.keys(auth).length > 0) {
+    const url = joinUrl(base, `/state/user`);
+    const res = await fetch(url, { method: "GET", headers: auth });
+    if (!res.ok) {
+      const msg = await res.text().catch(() => "");
+      throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
+    }
+    const data = await res.json();
+    // Normalize to legacy shape for callers
+    return { device_id: String(data?.user_id || ""), state: data?.state, stored: data?.stored };
+  }
+
   const url = joinUrl(base, `/state/${encodeURIComponent(deviceId)}`);
   const res = await fetch(url, { method: "GET" });
   if (!res.ok) {
@@ -189,10 +221,54 @@ export async function getClientState(deviceId: string): Promise<{ device_id: str
 
 export async function saveClientState(deviceId: string, state: any): Promise<{ ok: boolean; stored?: string }> {
   const base = getApiBase();
+  const auth = await authHeader();
+  // If authenticated, save per-user state
+  if (Object.keys(auth).length > 0) {
+    const url = joinUrl(base, `/state/user`);
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...auth },
+      body: JSON.stringify({ state }),
+    });
+    if (!res.ok) {
+      const msg = await res.text().catch(() => "");
+      throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
+    }
+    return res.json();
+  }
+
   const url = joinUrl(base, `/state/${encodeURIComponent(deviceId)}`);
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ state }),
+  });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
+  }
+  return res.json();
+}
+
+export async function getUserState(): Promise<{ user_id: string; state: any; stored?: string }> {
+  const base = getApiBase();
+  const url = joinUrl(base, `/state/user`);
+  const headers = await authHeader();
+  const res = await fetch(url, { method: "GET", headers });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
+  }
+  return res.json();
+}
+
+export async function saveUserState(state: any): Promise<{ ok: boolean; stored?: string }> {
+  const base = getApiBase();
+  const url = joinUrl(base, `/state/user`);
+  const headers = await authHeader();
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
     body: JSON.stringify({ state }),
   });
   if (!res.ok) {
@@ -224,6 +300,8 @@ export async function getCloudAudioCatalog(): Promise<CloudAudioCatalog> {
 export interface AdminWellbeingEvent {
   id: string;
   device_id: string;
+  user_id?: string | null;
+  user_email?: string | null;
   at: string;
   rating: number;
   tag: string;
@@ -281,9 +359,10 @@ export async function adminWellbeingStats(adminToken: string, days = 30): Promis
 export async function generateSession(payload: GenerationRequest): Promise<GenerationResponse> {
   const base = getApiBase();
   const url = joinUrl(base, "/generate");
+  const auth = await authHeader();
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...auth },
     body: JSON.stringify(payload),
   });
   if (!res.ok) {

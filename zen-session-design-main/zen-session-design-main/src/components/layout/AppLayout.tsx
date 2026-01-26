@@ -24,7 +24,7 @@ export function AppLayout({ children, requireAuth = true }: AppLayoutProps) {
   }
 
   // Redirect to login if not authenticated
-  if (requireAuth && !isAuthenticated && location.pathname !== "/login") {
+  if (requireAuth && !isAuthenticated && location.pathname !== "/login" && location.pathname !== "/reset-password") {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

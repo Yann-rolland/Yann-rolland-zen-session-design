@@ -10,6 +10,7 @@ import Home from "./pages/Home";
 import History from "./pages/History";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import AdminInsights from "./pages/AdminInsights";
 
@@ -26,6 +27,7 @@ const App = () => (
             <Routes>
               {/* Public route */}
               <Route path="/login" element={<Login />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               
               {/* Protected routes */}
               <Route

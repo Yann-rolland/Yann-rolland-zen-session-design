@@ -13,6 +13,8 @@ if (!(Test-Path ".\\node_modules")) {
   npm install
 }
 
-npm run dev -- --host --port $Port
+# Call Vite directly to avoid argument parsing quirks across shells.
+# Keep host IPv4-friendly so http://127.0.0.1 works.
+npx --yes vite --host 0.0.0.0 --port $Port --strictPort
 
 

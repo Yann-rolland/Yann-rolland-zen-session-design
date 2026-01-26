@@ -9,15 +9,20 @@ import { Label } from "@/components/ui/label";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { Sparkles, Mail, Lock, User, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function Login() {
   const [isSignUp, setIsSignUp] = useState(false);
+  const [isForgot, setIsForgot] = useState(false);
+  const [isCodeLogin, setIsCodeLogin] = useState(false);
+  const [codeSent, setCodeSent] = useState(false);
+  const [code, setCode] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   
-  const { login, signup, isLoading } = useAuth();
+  const { login, signup, requestLoginCode, verifyLoginCode, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
@@ -28,12 +33,44 @@ export default function Login() {
     e.preventDefault();
     
     try {
-      if (isSignUp) {
-        await signup(email, password, name);
+      if (isCodeLogin) {
+        if (!codeSent) {
+          await requestLoginCode(email);
+          toast({
+            title: "Code envoyé",
+            description: "Vérifie tes emails et saisis le code reçu.",
+          });
+          setCodeSent(true);
+          return;
+        }
+        await verifyLoginCode(email, code);
+        toast({ title: "Connexion réussie", description: "Bon retour parmi nous !" });
+        navigate(from, { replace: true });
+        return;
+      }
+      if (isForgot) {
+        const redirectTo = `${window.location.origin}/reset-password`;
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
+        if (error) throw error;
         toast({
-          title: "Compte créé",
-          description: "Bienvenue sur BN-2 !",
+          title: "Email envoyé",
+          description: "Vérifie ta boîte mail pour réinitialiser ton mot de passe.",
         });
+        setIsForgot(false);
+        return;
+      }
+      if (isSignUp) {
+        const res = await signup(email, password, name);
+        if (res.needsEmailConfirmation) {
+          toast({
+            title: "Compte créé",
+            description: "Vérifie tes emails pour confirmer ton compte, puis reconnecte‑toi.",
+          });
+          // Stay on login screen
+          setIsSignUp(false);
+          return;
+        }
+        toast({ title: "Compte créé", description: "Bienvenue sur BN-2 !" });
       } else {
         await login(email, password);
         toast({
@@ -45,7 +82,7 @@ export default function Login() {
     } catch (error) {
       toast({
         title: "Erreur",
-        description: "Vérifiez vos identifiants et réessayez.",
+        description: (error as any)?.message || "Vérifiez vos identifiants et réessayez.",
         variant: "destructive",
       });
     }
@@ -71,7 +108,13 @@ export default function Login() {
           </div>
           <h1 className="text-2xl font-bold text-gradient-primary">BN-2</h1>
           <p className="text-muted-foreground mt-2">
-            {isSignUp ? "Créez votre compte" : "Connectez-vous pour continuer"}
+            {isForgot
+              ? "Réinitialiser votre mot de passe"
+              : isCodeLogin
+                ? "Connexion par code"
+                : isSignUp
+                  ? "Créez votre compte"
+                  : "Connectez-vous pour continuer"}
           </p>
         </div>
 
@@ -111,32 +154,54 @@ export default function Login() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Mot de passe</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            {isCodeLogin && (
+              <div className="space-y-2">
+                <Label htmlFor="code">Code reçu par email</Label>
                 <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  className="pl-10 pr-10 bg-secondary/50 border-border/50"
+                  id="code"
+                  inputMode="numeric"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  placeholder="123456"
+                  disabled={!codeSent}
+                  className="bg-secondary/50 border-border/50"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showPassword ? (
-                    <EyeOff className="w-4 h-4" />
-                  ) : (
-                    <Eye className="w-4 h-4" />
-                  )}
-                </button>
+                {!codeSent && (
+                  <div className="text-xs text-muted-foreground">
+                    Clique sur “Envoyer le code” puis saisis le code reçu.
+                  </div>
+                )}
               </div>
-            </div>
+            )}
+
+            {!isForgot && !isCodeLogin && (
+              <div className="space-y-2">
+                <Label htmlFor="password">Mot de passe</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="pl-10 pr-10 bg-secondary/50 border-border/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
 
             <Button
               type="submit"
@@ -145,6 +210,10 @@ export default function Login() {
             >
               {isLoading ? (
                 <LoadingSpinner size="sm" />
+              ) : isForgot ? (
+                "Envoyer le lien"
+              ) : isCodeLogin ? (
+                codeSent ? "Valider le code" : "Envoyer le code"
               ) : isSignUp ? (
                 "Créer un compte"
               ) : (
@@ -153,9 +222,55 @@ export default function Login() {
             </Button>
           </form>
 
-          <div className="mt-6 text-center">
+          <div className="mt-4 flex items-center justify-between text-sm">
+            <button
+              type="button"
+              onClick={() => {
+                setIsForgot(true);
+                setIsSignUp(false);
+                setIsCodeLogin(false);
+                setCodeSent(false);
+                setCode("");
+              }}
+              className="text-muted-foreground hover:text-primary transition-colors"
+            >
+              Mot de passe oublié ?
+            </button>
+            {isForgot && (
+              <button
+                type="button"
+                onClick={() => setIsForgot(false)}
+                className="text-muted-foreground hover:text-primary transition-colors"
+              >
+                Retour
+              </button>
+            )}
+          </div>
+
+          <div className="mt-3 text-center">
+            <button
+              type="button"
+              onClick={() => {
+                setIsCodeLogin((v) => !v);
+                setIsForgot(false);
+                setIsSignUp(false);
+                setCodeSent(false);
+                setCode("");
+              }}
+              className="text-sm text-muted-foreground hover:text-primary transition-colors"
+            >
+              {isCodeLogin ? (
+                <>Connexion avec <span className="text-primary">mot de passe</span></>
+              ) : (
+                <>Connexion avec <span className="text-primary">code</span></>
+              )}
+            </button>
+          </div>
+
+          <div className="mt-4 text-center">
             <button
               onClick={() => setIsSignUp(!isSignUp)}
+              disabled={isForgot || isCodeLogin}
               className="text-sm text-muted-foreground hover:text-primary transition-colors"
             >
               {isSignUp ? (

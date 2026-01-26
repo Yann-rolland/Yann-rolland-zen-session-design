@@ -115,18 +115,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // NOTE: settings/progress sont synchronisés via /state (Supabase/Postgres) quand dispo.
+  // NOTE: settings/progress/history sont synchronisés via /state/user (Supabase/Postgres) quand dispo.
 
-  // Load from backend state (if available)
+  // Load per-user state from backend when auth becomes available
   useEffect(() => {
-    (async () => {
+    let unsub: { subscription: { unsubscribe: () => void } } | null = null;
+
+    async function loadForCurrentUser() {
       try {
-        const { getClientState } = await import("@/api/hypnoticApi");
-        const resp = await getClientState(deviceId);
+        const { supabase } = await import("@/lib/supabaseClient");
+        const { data } = await supabase.auth.getUser();
+        const uid = data.user?.id;
+        if (!uid) return;
+
+        const { getUserState } = await import("@/api/hypnoticApi");
+        const resp = await getUserState();
         const st = resp?.state || {};
+
         const s = st.settings || null;
         const p = st.progress || null;
+        const h = st.history || null;
         if (s) setSettings((prev) => ({ ...prev, ...s }));
+        if (h && Array.isArray(h)) setHistory(h);
         if (p) {
           setProgress({
             ...defaultProgress,
@@ -136,9 +146,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           });
         }
       } catch {
-        // Fallback: ancien localStorage si présent (mode offline)
+        // Fallback local, isolated by userId
         try {
-          const rawP = localStorage.getItem(LS_PROGRESS);
+          const { supabase } = await import("@/lib/supabaseClient");
+          const { data } = await supabase.auth.getUser();
+          const uid = data.user?.id;
+          if (!uid) return;
+          const rawP = localStorage.getItem(`${LS_PROGRESS}:${uid}`);
           const dataP = safeJsonParse<ProgressData>(rawP);
           if (dataP && typeof dataP.points === "number") {
             setProgress({
@@ -148,25 +162,61 @@ export function AppProvider({ children }: { children: ReactNode }) {
               wellbeing: Array.isArray(dataP.wellbeing) ? dataP.wellbeing : [],
             });
           }
+          const rawH = localStorage.getItem(`bn3_history_v1:${uid}`);
+          const dataH = safeJsonParse<HistoryEntry[]>(rawH);
+          if (Array.isArray(dataH)) setHistory(dataH);
         } catch {
           // ignore
         }
       }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deviceId]);
+    }
 
-  // Autosave debounced to backend state
+    (async () => {
+      try {
+        const { supabase } = await import("@/lib/supabaseClient");
+        unsub = supabase.auth.onAuthStateChange((_ev) => {
+          // Clear local state when switching users, then load new user's data
+          setHistory([]);
+          setProgress(defaultProgress);
+          loadForCurrentUser();
+        }).data;
+        // initial load
+        loadForCurrentUser();
+      } catch {
+        // ignore
+      }
+    })();
+
+    return () => {
+      try {
+        unsub?.subscription?.unsubscribe();
+      } catch {
+        // ignore
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Autosave debounced to per-user backend state
   useEffect(() => {
     const t = window.setTimeout(() => {
       (async () => {
         try {
-          const { saveClientState } = await import("@/api/hypnoticApi");
-          await saveClientState(deviceId, { settings, progress });
+          const { supabase } = await import("@/lib/supabaseClient");
+          const { data } = await supabase.auth.getUser();
+          const uid = data.user?.id;
+          if (!uid) return;
+          const { saveUserState } = await import("@/api/hypnoticApi");
+          await saveUserState({ settings, progress, history });
         } catch {
-          // fallback local
+          // fallback local per user
           try {
-            localStorage.setItem(LS_PROGRESS, safeJsonStringify(progress));
+            const { supabase } = await import("@/lib/supabaseClient");
+            const { data } = await supabase.auth.getUser();
+            const uid = data.user?.id;
+            if (!uid) return;
+            localStorage.setItem(`${LS_PROGRESS}:${uid}`, safeJsonStringify(progress));
+            localStorage.setItem(`bn3_history_v1:${uid}`, safeJsonStringify(history));
           } catch {
             // ignore
           }
@@ -174,7 +224,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       })();
     }, 600);
     return () => window.clearTimeout(t);
-  }, [deviceId, settings, progress]);
+  }, [settings, progress, history]);
 
   const updateSettings = (updates: Partial<AppSettings>) => {
     setSettings(prev => ({ ...prev, ...updates }));
@@ -267,12 +317,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const arr = safeJsonParse<WellBeingEntry[]>(raw) || [];
       if (arr.length === 0) return;
       const { sendWellBeingFeedback } = await import("@/api/hypnoticApi");
+      const { supabase } = await import("@/lib/supabaseClient");
+      const { data } = await supabase.auth.getUser();
+      const userId = data.user?.id;
+      const userEmail = data.user?.email;
+      // Require authenticated user identity to link events to a profile
+      if (!userId || !userEmail) {
+        try {
+          toast("Connexion requise", {
+            description: "Connecte‑toi pour envoyer ton ressenti au développeur (sinon il reste stocké localement).",
+          });
+        } catch {
+          // ignore
+        }
+        return;
+      }
       // Envoie au plus 10 d'un coup pour éviter spam
       for (const e of arr.slice(0, 10)) {
         try {
           await sendWellBeingFeedback({
             id: e.id,
             device_id: deviceId,
+            user_id: userId,
+            user_email: userEmail,
             at: e.at,
             rating: e.rating,
             tag: String(e.tag || "autre"),
@@ -293,6 +360,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Flush queue on startup + when opt-in is toggled
   useEffect(() => {
     flushWellBeingQueue();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.shareWellBeingWithDeveloper]);
+
+  // Also flush whenever auth state changes (e.g., user logs in after writing notes)
+  useEffect(() => {
+    let unsub: { subscription: { unsubscribe: () => void } } | null = null;
+    (async () => {
+      try {
+        const { supabase } = await import("@/lib/supabaseClient");
+        unsub = supabase.auth.onAuthStateChange(() => {
+          flushWellBeingQueue();
+        }).data;
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      try {
+        unsub?.subscription?.unsubscribe();
+      } catch {
+        // ignore
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.shareWellBeingWithDeveloper]);
 

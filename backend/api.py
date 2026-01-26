@@ -7,8 +7,16 @@ import traceback
 
 from binaural import generate_binaural_track
 from cache import save_cached, stable_cache_key, try_load_cached
-from db import (db_enabled, get_client_state, insert_wellbeing_event,
-                list_wellbeing_events, upsert_client_state, wellbeing_stats)
+from db import (
+    db_enabled,
+    get_client_state,
+    get_user_state,
+    insert_wellbeing_event,
+    list_wellbeing_events,
+    upsert_client_state,
+    upsert_user_state,
+    wellbeing_stats,
+)
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 from llm import DEFAULT_SECTIONS, debug_ollama_once
@@ -21,6 +29,7 @@ from music import generate_music_bed
 from prompts import build_prompt
 from tts import synthesize_tts_cached
 from supabase_storage import build_default_catalog, storage_enabled
+from supabase_auth import get_current_user
 
 router = APIRouter()
 
@@ -204,8 +213,11 @@ def admin_wellbeing_events(
     _require_admin(request)
     if not db_enabled():
         raise HTTPException(status_code=503, detail="DB disabled (DATABASE_URL/psycopg missing)")
-    events = list_wellbeing_events(limit=limit, device_id=device_id, tag=tag, days=days)
-    return {"events": events}
+    try:
+        events = list_wellbeing_events(limit=limit, device_id=device_id, tag=tag, days=days)
+        return {"events": events}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"DB error: {e}")
 
 
 @router.get("/admin/wellbeing_stats")
@@ -213,7 +225,10 @@ def admin_wellbeing_stats(request: Request, days: int = 30):
     _require_admin(request)
     if not db_enabled():
         raise HTTPException(status_code=503, detail="DB disabled (DATABASE_URL/psycopg missing)")
-    return wellbeing_stats(days=days)
+    try:
+        return wellbeing_stats(days=days)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"DB error: {e}")
 
 @router.post("/feedback/wellbeing")
 async def feedback_wellbeing(payload: WellBeingFeedback, request: Request):
@@ -231,7 +246,11 @@ async def feedback_wellbeing(payload: WellBeingFeedback, request: Request):
     fb_dir.mkdir(parents=True, exist_ok=True)
     path = fb_dir / "wellbeing.jsonl"
 
+    # Always bind event to authenticated Supabase user (prevents mixing users)
+    u = get_current_user(request)
     event = payload.model_dump()
+    event["user_id"] = u.id
+    event["user_email"] = u.email
     # Ajoute un minimum de contexte (sans secrets)
     try:
         event["_received_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -246,6 +265,8 @@ async def feedback_wellbeing(payload: WellBeingFeedback, request: Request):
             insert_wellbeing_event(
                 event_id=str(event.get("id") or ""),
                 device_id=str(event.get("device_id") or ""),
+                user_id=str(event.get("user_id") or "") or None,
+                user_email=str(event.get("user_email") or "") or None,
                 at_iso=str(event.get("at") or ""),
                 rating=int(float(event.get("rating") or 0)),
                 tag=str(event.get("tag") or "autre"),
@@ -255,14 +276,17 @@ async def feedback_wellbeing(payload: WellBeingFeedback, request: Request):
                 client_ip=str(event.get("_client_ip") or "") or None,
             )
             return {"ok": True, "stored": "db"}
-        except Exception:
-            # fallback file
-            pass
+        except Exception as e:
+            # fallback file (but keep the reason to debug)
+            try:
+                event["_db_error"] = str(e)
+            except Exception:
+                pass
 
     line = json.dumps(event, ensure_ascii=False) + "\n"
     with path.open("a", encoding="utf-8") as f:
         f.write(line)
-    return {"ok": True}
+    return {"ok": True, "stored": "file"}
 
 
 @router.get("/state/{device_id}")
@@ -297,6 +321,45 @@ def get_state(device_id: str):
     return {"device_id": device_id, "state": {}, "stored": "file"}
 
 
+@router.get("/state/user")
+def get_state_user(request: Request):
+    """
+    Retourne l'état (progress/settings/history) du user connecté (Supabase).
+    Auth: Authorization: Bearer <supabase_access_token>
+    Stockage:
+    - si DATABASE_URL => table user_state
+    """
+    if not db_enabled():
+        raise HTTPException(status_code=503, detail="DB disabled (DATABASE_URL/psycopg missing)")
+    u = get_current_user(request)
+    try:
+        st = get_user_state(user_id=u.id) or {}
+        return {"user_id": u.id, "state": st, "stored": "db"}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"DB error: {e}")
+
+
+@router.post("/state/user")
+async def save_state_user(request: Request):
+    """
+    Sauve l'état (progress/settings/history) du user connecté (Supabase).
+    Auth: Authorization: Bearer <supabase_access_token>
+    """
+    if not db_enabled():
+        raise HTTPException(status_code=503, detail="DB disabled (DATABASE_URL/psycopg missing)")
+    u = get_current_user(request)
+    try:
+        body = await request.json()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON body: {e}")
+    state = body.get("state", body)
+    try:
+        upsert_user_state(user_id=u.id, state=state)
+        return {"ok": True, "stored": "db"}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"DB error: {e}")
+
+
 @router.post("/state/{device_id}")
 async def save_state(device_id: str, request: Request):
     """
@@ -328,13 +391,14 @@ async def save_state(device_id: str, request: Request):
     return {"ok": True, "stored": "file"}
 
 @router.get("/runs")
-def list_runs(limit: int = 50):
+def list_runs(request: Request, limit: int = 50):
     """
     Liste les derniers runs (métadonnées légères).
     """
     import json
     from pathlib import Path
 
+    u = get_current_user(request)
     base_dir = Path(__file__).resolve().parent.parent
     runs_dir = base_dir / "assets" / "runs"
     if not runs_dir.exists():
@@ -352,6 +416,10 @@ def list_runs(limit: int = 50):
                 meta = json.loads(req_path.read_text(encoding="utf-8"))
             except Exception:
                 meta = {}
+        # Per-user isolation: only list runs that belong to current user
+        owner = str(meta.get("_user_id") or meta.get("user_id") or "").strip()
+        if owner != u.id:
+            continue
 
         runs.append(
             {
@@ -369,7 +437,7 @@ def list_runs(limit: int = 50):
 
 
 @router.get("/runs/{run_id}")
-def get_run(run_id: str):
+def get_run(run_id: str, request: Request):
     """
     Retourne les détails d'un run (texte + paths).
     """
@@ -381,12 +449,16 @@ def get_run(run_id: str):
     if not run_dir.exists():
         raise HTTPException(status_code=404, detail="Run introuvable")
 
+    u = get_current_user(request)
     req = {}
     if (run_dir / "request.json").exists():
         try:
             req = json.loads((run_dir / "request.json").read_text(encoding="utf-8"))
         except Exception:
             req = {}
+    owner = str(req.get("_user_id") or req.get("user_id") or "").strip()
+    if owner != u.id:
+        raise HTTPException(status_code=404, detail="Run introuvable")
 
     texte = None
     if (run_dir / "script.json").exists():
@@ -465,7 +537,7 @@ def export_tts_dataset():
 
 
 @router.delete("/runs/{run_id}")
-def delete_run(run_id: str):
+def delete_run(run_id: str, request: Request):
     """
     Supprime un run (dossier assets/runs/<run_id>).
     """
@@ -476,12 +548,24 @@ def delete_run(run_id: str):
     run_dir = base_dir / "assets" / "runs" / run_id
     if not run_dir.exists():
         raise HTTPException(status_code=404, detail="Run introuvable")
+    # ownership check
+    import json
+    req = {}
+    if (run_dir / "request.json").exists():
+        try:
+            req = json.loads((run_dir / "request.json").read_text(encoding="utf-8"))
+        except Exception:
+            req = {}
+    u = get_current_user(request)
+    owner = str(req.get("_user_id") or req.get("user_id") or "").strip()
+    if owner != u.id:
+        raise HTTPException(status_code=404, detail="Run introuvable")
     shutil.rmtree(run_dir, ignore_errors=True)
     return {"deleted": run_id}
 
 
 @router.post("/generate", response_model=GenerationResponse)
-async def generate(request: GenerationRequest):
+async def generate(request: GenerationRequest, http_request: Request):
     """
     Pipeline principal :
     1. Générer le texte structuré via Ollama.
@@ -491,9 +575,13 @@ async def generate(request: GenerationRequest):
     """
     from pathlib import Path
     base_dir = Path(__file__).resolve().parent.parent
+    u = get_current_user(http_request)
 
     # Cache/fallback: si une génération échoue, on pourra renvoyer le dernier run OK pour ces paramètres.
     payload = request.model_dump()
+    # Attach owner (used for /runs filtering); never trust client-supplied user identity
+    payload["_user_id"] = u.id
+    payload["_user_email"] = u.email
     key = stable_cache_key(payload)
     cached = try_load_cached(base_dir=base_dir, key=key)
     # Si l'ancien cache venait d'un fallback LLM, on préfère regénérer (évite de "rester bloqué" sur le script par défaut)

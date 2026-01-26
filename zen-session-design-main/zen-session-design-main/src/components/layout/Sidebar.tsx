@@ -32,12 +32,12 @@ const navItems = [
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const location = useLocation();
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const { settings, updateSettings } = useApp();
 
-  // Le lien "Admin" est visible pour les utilisateurs connectés.
+  // Le lien "Admin" est visible uniquement pour les comptes admin.
   // L'accès réel aux données reste protégé par ADMIN_TOKEN côté backend.
-  const allNavItems = isAuthenticated
+  const allNavItems = isAdmin
     ? [...navItems, { to: "/admin/insights", icon: Shield, label: "Admin" }]
     : navItems;
 

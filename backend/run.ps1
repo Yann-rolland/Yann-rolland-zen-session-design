@@ -1,5 +1,6 @@
 param(
-  [int]$Port = 8006
+  [int]$Port = 8006,
+  [switch]$NoReload
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,6 +13,22 @@ if (!(Test-Path "..\\.venv\\Scripts\\python.exe")) {
 }
 
 Write-Host "Starting backend on port $Port (reads env.local/.env automatically)..." -ForegroundColor Cyan
-& ..\.venv\Scripts\python.exe -m uvicorn main:app --reload --port $Port
+
+# On Windows, --reload can crash if it scans large virtualenv folders (e.g. backend\.venv / .venv).
+# We exclude common venv paths by default; use -NoReload to disable reload entirely.
+$uvicornArgs = @("main:app", "--port", "$Port")
+
+if (-not $NoReload) {
+  $uvicornArgs += @(
+    "--reload",
+    "--reload-dir", ".",
+    "--reload-exclude", ".venv",
+    "--reload-exclude", ".venv/*",
+    "--reload-exclude", ".venv/**",
+    "--reload-exclude", "**/.venv/**"
+  )
+}
+
+& ..\.venv\Scripts\python.exe -m uvicorn @uvicornArgs
 
 

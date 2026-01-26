@@ -184,3 +184,20 @@ Dans Vercel:
 - **Output Directory**: `dist`
 - **Environment**: `VITE_API_BASE=https://<ton-backend-render>.onrender.com`
 
+Ajoute aussi (pour l’auth email + mot de passe Supabase) :
+- `VITE_SUPABASE_URL=https://<project-ref>.supabase.co`
+- `VITE_SUPABASE_ANON_KEY=<anon key (public)>`
+
+Optionnel (mode “par invitation”) :
+- `VITE_INVITE_ONLY=true`
+- `VITE_ALLOWED_EMAILS=email1@domaine.com,email2@domaine.com`
+
+Optionnel (UI Admin seulement pour toi) :
+- `VITE_ADMIN_EMAILS=ton-email@domaine.com`
+
+## Supabase Auth — stocker email à côté de l’identifiant
+
+Supabase Auth stocke déjà l’email dans `auth.users`, mais pour avoir un tableau “propre” dans ton schéma public
+avec `id + email`, exécute une fois dans Supabase (SQL Editor) :
+
+- `backend/supabase_profiles.sql`
