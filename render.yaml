@@ -8,16 +8,16 @@ services:
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     autoDeploy: true
-    envVars:
-      - key: PORT
-        value: 8006
-      # Add these in Render dashboard (do not commit real secrets):
-      # - DATABASE_URL (pooler + sslmode=require)
-      # - ADMIN_TOKEN
-      # - CORS_ORIGINS (your Vercel domain)
-      # Optional:
-      # - GEMINI_API_KEY
-      # - SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / SUPABASE_STORAGE_BUCKET
+    # NOTE:
+    # Render provides $PORT automatically. Do NOT hardcode PORT here.
+    # Add these in Render dashboard (do not commit real secrets):
+    # - DATABASE_URL (pooler + sslmode=require)
+    # - ADMIN_TOKEN
+    # - CORS_ORIGINS (your Vercel domain)
+    # - SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (required for authenticated endpoints)
+    # Optional:
+    # - GEMINI_API_KEY
+    # - SUPABASE_STORAGE_BUCKET
 
 
 
