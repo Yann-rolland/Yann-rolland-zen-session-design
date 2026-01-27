@@ -85,6 +85,7 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
   const [isPlaying, setIsPlaying] = React.useState(false);
   const [error, setError] = React.useState<string>("");
   const [cloudCatalog, setCloudCatalog] = React.useState<{ music: Record<string, string>; ambiences: Record<string, string> } | null>(null);
+  const isMountedRef = React.useRef(true);
   const stopTimeoutRef = React.useRef<number | null>(null);
   const stopTokenRef = React.useRef<number>(0);
 
@@ -106,6 +107,7 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
   // Load cloud audio catalog (optional) - fallback to local /library if not configured.
   React.useEffect(() => {
     let alive = true;
+    isMountedRef.current = true;
     (async () => {
       try {
         const cat = await getCloudAudioCatalog();
@@ -119,8 +121,23 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
     })();
     return () => {
       alive = false;
+      isMountedRef.current = false;
     };
   }, []);
+
+  const ensureCloudCatalogLoaded = async () => {
+    if (cloudCatalog) return cloudCatalog;
+    try {
+      const cat = await getCloudAudioCatalog();
+      const next = cat?.enabled ? { music: cat.music || {}, ambiences: cat.ambiences || {} } : { music: {}, ambiences: {} };
+      if (isMountedRef.current) setCloudCatalog(next);
+      return next;
+    } catch {
+      const next = { music: {}, ambiences: {} };
+      if (isMountedRef.current) setCloudCatalog(next);
+      return next;
+    }
+  };
 
   // Reset UI state when session/config changes (but keep user tweaks while playing)
   React.useEffect(() => {
@@ -254,7 +271,7 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
     // If no cloud catalog is configured, avoid trying to play a 404 HTML page as audio (browser shows "no compatible source").
     if (!cloudSrc && import.meta.env.PROD) {
       throw new Error(
-        "Musique indisponible en production. Ajoute des MP3 dans Supabase Storage (catalog audio) ou désactive 'Fond musical'."
+        "Catalogue audio en cours de chargement (ou musique manquante). Réessaie dans 2s, ou désactive 'Fond musical'."
       );
     }
     const src = cloudSrc || libraryUrl(`/library/music/user/${file}`);
@@ -329,6 +346,12 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
       // Annule un stop en cours (sinon finalize coupe la lecture)
       stopTokenRef.current += 1;
       clearStopTimeout();
+
+      // In prod we depend on the backend-provided cloud catalog for MP3s.
+      // If the user presses Play too quickly, wait for the catalog to load.
+      if (import.meta.env.PROD) {
+        await ensureCloudCatalogLoaded();
+      }
 
       await ensureContext();
       const ctx = ctxRef.current;
