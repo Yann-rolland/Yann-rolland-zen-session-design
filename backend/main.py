@@ -75,7 +75,30 @@ if cors_env:
     ):
         allow_origin_regex = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
     else:
-        allow_origin_regex = None
+        # Support Vercel preview deployments.
+        # If you allow https://my-app.vercel.app, Vercel may serve previews like:
+        # https://my-app-<hash>.vercel.app
+        # We derive a regex that matches the allowed Vercel project(s) + their preview subdomains.
+        try:
+            from urllib.parse import urlparse
+            import re
+
+            vercel_hosts = []
+            for o in allow_origins:
+                u = urlparse(o)
+                host = (u.hostname or "").lower()
+                if host.endswith(".vercel.app"):
+                    base = host[: -len(".vercel.app")]
+                    if base:
+                        vercel_hosts.append(re.escape(base))
+
+            if vercel_hosts:
+                # allow: https://<base>.vercel.app and https://<base>-<anything>.vercel.app
+                allow_origin_regex = rf"^https://(?:{'|'.join(vercel_hosts)})(?:-[a-z0-9-]+)*\.vercel\.app$"
+            else:
+                allow_origin_regex = None
+        except Exception:
+            allow_origin_regex = None
 else:
     allow_origins = [
         "http://localhost:5173",
