@@ -205,7 +205,7 @@ export default function History() {
           description="Vos sessions générées apparaîtront ici une fois que vous aurez lancé une session."
           action={{
             label: "Créer une session",
-            onClick: () => window.location.href = "/",
+            onClick: () => navigate("/"),
           }}
         />
       </div>

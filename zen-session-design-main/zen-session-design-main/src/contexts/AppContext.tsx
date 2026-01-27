@@ -1,4 +1,4 @@
-import { toast } from "@/components/ui/sonner";
+import { toast } from "@/hooks/use-toast";
 import { safeJsonParse, safeJsonStringify, todayKey } from '@/lib/persistence';
 import { AppSettings, HistoryEntry, PlayerState, ProgressData, Session, SessionConfig, Trophy, TrophyId, WellBeingEntry } from '@/types';
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
@@ -274,7 +274,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         next.points = (next.points || 0) + trophy.pointsReward;
         // Toast discret
         try {
-          toast(`Trophée débloqué: ${trophy.title}`, { description: `+${trophy.pointsReward} pts` });
+          toast({ title: `Trophée débloqué: ${trophy.title}`, description: `+${trophy.pointsReward} pts` });
         } catch {
           // ignore
         }
@@ -324,7 +324,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Require authenticated user identity to link events to a profile
       if (!userId || !userEmail) {
         try {
-          toast("Connexion requise", {
+          toast({
+            title: "Connexion requise",
             description: "Connecte‑toi pour envoyer ton ressenti au développeur (sinon il reste stocké localement).",
           });
         } catch {
@@ -439,7 +440,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         lastSessionDay: day,
       };
       try {
-        toast("Session terminée", { description: `+${basePoints} pts` });
+        toast({ title: "Session terminée", description: `+${basePoints} pts` });
       } catch {
         // ignore
       }
