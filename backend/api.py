@@ -164,6 +164,12 @@ def debug_env():
         dns_ok = False
         dns_err = str(e)
 
+    cors_env = (os.environ.get("CORS_ORIGINS") or "").strip()
+    allow_origins = [o.strip() for o in cors_env.split(",") if o.strip()] if cors_env else []
+
+    supabase_url = (os.environ.get("SUPABASE_URL") or "").strip()
+    supabase_bucket = (os.environ.get("SUPABASE_STORAGE_BUCKET") or "").strip()
+
     return {
         "python_executable": getattr(sys, "executable", None),
         "DATABASE_URL_set": bool(db_url),
@@ -174,6 +180,11 @@ def debug_env():
         "psycopg_import_error": psycopg_err,
         "db_enabled": db_enabled(),
         "ADMIN_TOKEN_set": bool((os.environ.get("ADMIN_TOKEN") or "").strip()),
+        "CORS_ORIGINS_set": bool(cors_env),
+        "CORS_ORIGINS_count": len(allow_origins),
+        "CORS_ORIGINS": allow_origins,
+        "SUPABASE_URL_set": bool(supabase_url),
+        "SUPABASE_STORAGE_BUCKET_set": bool(supabase_bucket),
         "GEMINI_API_KEY_set": bool(os.environ.get("GEMINI_API_KEY")),
         "FREESOUND_API_KEY_set": bool(os.environ.get("FREESOUND_API_KEY")),
         "OLLAMA_MODEL": os.environ.get("OLLAMA_MODEL", None),
