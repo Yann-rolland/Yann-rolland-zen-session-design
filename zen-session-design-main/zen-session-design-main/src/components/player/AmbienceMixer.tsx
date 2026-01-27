@@ -85,6 +85,8 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
   const [isPlaying, setIsPlaying] = React.useState(false);
   const [error, setError] = React.useState<string>("");
   const [cloudCatalog, setCloudCatalog] = React.useState<{ music: Record<string, string>; ambiences: Record<string, string> } | null>(null);
+  const [cloudCatalogStatus, setCloudCatalogStatus] = React.useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [cloudCatalogError, setCloudCatalogError] = React.useState<string>("");
   const isMountedRef = React.useRef(true);
   const stopTimeoutRef = React.useRef<number | null>(null);
   const stopTokenRef = React.useRef<number>(0);
@@ -108,15 +110,20 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
   React.useEffect(() => {
     let alive = true;
     isMountedRef.current = true;
+    setCloudCatalogStatus("loading");
     (async () => {
       try {
         const cat = await getCloudAudioCatalog();
         if (!alive) return;
         if (cat?.enabled) setCloudCatalog({ music: cat.music || {}, ambiences: cat.ambiences || {} });
         else setCloudCatalog({ music: {}, ambiences: {} });
+        setCloudCatalogError("");
+        setCloudCatalogStatus("ready");
       } catch {
         if (!alive) return;
         setCloudCatalog({ music: {}, ambiences: {} });
+        setCloudCatalogError("Impossible de charger /cloud-audio/catalog (réseau/CORS/VITE_API_BASE).");
+        setCloudCatalogStatus("error");
       }
     })();
     return () => {
@@ -127,14 +134,23 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
 
   const ensureCloudCatalogLoaded = async () => {
     if (cloudCatalog) return cloudCatalog;
+    setCloudCatalogStatus("loading");
     try {
       const cat = await getCloudAudioCatalog();
       const next = cat?.enabled ? { music: cat.music || {}, ambiences: cat.ambiences || {} } : { music: {}, ambiences: {} };
       if (isMountedRef.current) setCloudCatalog(next);
+      if (isMountedRef.current) {
+        setCloudCatalogError("");
+        setCloudCatalogStatus("ready");
+      }
       return next;
     } catch {
       const next = { music: {}, ambiences: {} };
       if (isMountedRef.current) setCloudCatalog(next);
+      if (isMountedRef.current) {
+        setCloudCatalogError("Impossible de charger /cloud-audio/catalog (réseau/CORS/VITE_API_BASE).");
+        setCloudCatalogStatus("error");
+      }
       return next;
     }
   };
@@ -271,7 +287,7 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
     // If no cloud catalog is configured, avoid trying to play a 404 HTML page as audio (browser shows "no compatible source").
     if (!cloudSrc && import.meta.env.PROD) {
       throw new Error(
-        "Catalogue audio en cours de chargement (ou musique manquante). Réessaie dans 2s, ou désactive 'Fond musical'."
+        "Catalogue audio non prêt (ou musique manquante). Vérifie VITE_API_BASE et le chargement du catalogue, puis réessaie."
       );
     }
     const src = cloudSrc || libraryUrl(`/library/music/user/${file}`);
@@ -501,12 +517,40 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
         </div>
       </div>
 
+      <div className="text-xs text-muted-foreground">
+        Cloud audio:{" "}
+        {cloudCatalogStatus === "loading"
+          ? "chargement…"
+          : cloudCatalogStatus === "ready"
+            ? "OK"
+            : cloudCatalogStatus === "error"
+              ? "erreur"
+              : "—"}
+        {cloudCatalogStatus === "error" ? (
+          <>
+            {" · "}
+            <span className="text-destructive">{cloudCatalogError}</span>
+            <div className="mt-1">
+              Test:{" "}
+              <a
+                className="underline"
+                href={`${(import.meta.env.VITE_API_BASE as string | undefined) || ""}/cloud-audio/catalog`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                ouvrir /cloud-audio/catalog
+              </a>
+            </div>
+          </>
+        ) : null}
+      </div>
+
       {error ? (
         <div className="text-sm text-destructive">
           {error}
           <div className="text-xs text-muted-foreground mt-1">
-            Si tu vois une erreur CORS, vérifie que Render autorise ton domaine Vercel dans `CORS_ORIGINS`
-            (ex: `{window.location.origin}`).
+            Si tu vois une erreur CORS, vérifie que Render autorise ton domaine Vercel dans `CORS_ORIGINS` (et que
+            `VITE_API_BASE` pointe vers Render, pas localhost).
           </div>
         </div>
       ) : null}
