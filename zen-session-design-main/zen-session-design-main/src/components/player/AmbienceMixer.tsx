@@ -234,6 +234,11 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
     }
     const file = musicFileForId(musicTrackId);
     const cloudSrc = cloudCatalog?.music?.[musicTrackId];
+    // In production deployments, the backend usually does NOT have local /library assets.
+    // If no cloud catalog is configured, avoid trying to play a 404 HTML page as audio.
+    if (!cloudSrc && import.meta.env.PROD) {
+      throw new Error("Aucune musique en ligne disponible. Configure Supabase Storage (catalog audio) pour les MP3.");
+    }
     const src = cloudSrc || libraryUrl(`/library/music/user/${file}`);
     musicElRef.current.crossOrigin = "anonymous";
     musicElRef.current.src = src;
@@ -459,7 +464,8 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
         <div className="text-sm text-destructive">
           {error}
           <div className="text-xs text-muted-foreground mt-1">
-            Si tu vois une erreur CORS, vérifie que le backend est lancé et que CORS autorise `http://localhost:8080`.
+            Si tu vois une erreur CORS, vérifie que Render autorise ton domaine Vercel dans `CORS_ORIGINS`
+            (ex: `{window.location.origin}`).
           </div>
         </div>
       ) : null}
