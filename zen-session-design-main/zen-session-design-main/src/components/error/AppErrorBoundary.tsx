@@ -9,6 +9,7 @@ type AppErrorBoundaryProps = {
 type AppErrorBoundaryState = {
   hasError: boolean;
   error?: Error;
+  componentStack?: string;
 };
 
 export class AppErrorBoundary extends React.Component<AppErrorBoundaryProps, AppErrorBoundaryState> {
@@ -22,6 +23,7 @@ export class AppErrorBoundary extends React.Component<AppErrorBoundaryProps, App
     // Keep a visible trace in prod logs (Vercel) + browser console.
     // eslint-disable-next-line no-console
     console.error("[AppErrorBoundary] Uncaught render error", error, errorInfo);
+    this.setState({ componentStack: errorInfo.componentStack });
   }
 
   private handleReload = () => {
@@ -36,6 +38,8 @@ export class AppErrorBoundary extends React.Component<AppErrorBoundaryProps, App
     if (!this.state.hasError) return this.props.children;
 
     const msg = this.state.error?.message || "Erreur inconnue";
+    const stack = this.state.error?.stack || "";
+    const componentStack = this.state.componentStack || "";
 
     return (
       <div className="min-h-screen bg-background">
@@ -59,6 +63,24 @@ export class AppErrorBoundary extends React.Component<AppErrorBoundaryProps, App
               <div className="rounded-md bg-muted/40 p-3 text-sm font-mono break-words">
                 {msg}
               </div>
+
+              {(stack || componentStack) ? (
+                <details className="rounded-md bg-muted/30 p-3">
+                  <summary className="cursor-pointer text-sm text-muted-foreground">
+                    Détails techniques (copie/colle si besoin)
+                  </summary>
+                  {stack ? (
+                    <pre className="mt-2 whitespace-pre-wrap break-words text-xs font-mono text-muted-foreground">
+                      {stack}
+                    </pre>
+                  ) : null}
+                  {componentStack ? (
+                    <pre className="mt-2 whitespace-pre-wrap break-words text-xs font-mono text-muted-foreground">
+                      {componentStack}
+                    </pre>
+                  ) : null}
+                </details>
+              ) : null}
 
               <div className="flex flex-wrap gap-2">
                 <Button onClick={this.handleReload}>Recharger</Button>

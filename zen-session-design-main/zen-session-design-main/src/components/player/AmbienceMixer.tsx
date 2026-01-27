@@ -234,10 +234,12 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
     }
     const file = musicFileForId(musicTrackId);
     const cloudSrc = cloudCatalog?.music?.[musicTrackId];
-    // In production deployments, the backend usually does NOT have local /library assets.
-    // If no cloud catalog is configured, avoid trying to play a 404 HTML page as audio.
+    // In production deployments (Vercel/Render), the backend usually does NOT ship local /library MP3 assets.
+    // If no cloud catalog is configured, avoid trying to play a 404 HTML page as audio (browser shows "no compatible source").
     if (!cloudSrc && import.meta.env.PROD) {
-      throw new Error("Aucune musique en ligne disponible. Configure Supabase Storage (catalog audio) pour les MP3.");
+      throw new Error(
+        "Musique indisponible en production. Ajoute des MP3 dans Supabase Storage (catalog audio) ou désactive 'Fond musical'."
+      );
     }
     const src = cloudSrc || libraryUrl(`/library/music/user/${file}`);
     musicElRef.current.crossOrigin = "anonymous";
