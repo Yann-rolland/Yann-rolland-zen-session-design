@@ -166,11 +166,30 @@ def debug_env():
 
     cors_env = (os.environ.get("CORS_ORIGINS") or "").strip()
     allow_origins = [o.strip() for o in cors_env.split(",") if o.strip()] if cors_env else []
+    cors_preview_regex = None
+    try:
+        # Mirror the Vercel-preview regex logic from main.py (debug only)
+        from urllib.parse import urlparse
+        import re
+
+        vercel_hosts = []
+        for o in allow_origins:
+            u = urlparse(o)
+            host = (u.hostname or "").lower()
+            if host.endswith(".vercel.app"):
+                base = host[: -len(".vercel.app")]
+                if base:
+                    vercel_hosts.append(re.escape(base))
+        if vercel_hosts:
+            cors_preview_regex = rf"^https://(?:{'|'.join(vercel_hosts)})(?:-[a-z0-9-]+)*\.vercel\.app$"
+    except Exception:
+        cors_preview_regex = None
 
     supabase_url = (os.environ.get("SUPABASE_URL") or "").strip()
     supabase_bucket = (os.environ.get("SUPABASE_STORAGE_BUCKET") or "").strip()
 
     return {
+        "RENDER_GIT_COMMIT": os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("RENDER_COMMIT") or None,
         "python_executable": getattr(sys, "executable", None),
         "DATABASE_URL_set": bool(db_url),
         "DATABASE_HOST": host,
@@ -183,6 +202,7 @@ def debug_env():
         "CORS_ORIGINS_set": bool(cors_env),
         "CORS_ORIGINS_count": len(allow_origins),
         "CORS_ORIGINS": allow_origins,
+        "CORS_VERCEL_PREVIEW_REGEX": cors_preview_regex,
         "SUPABASE_URL_set": bool(supabase_url),
         "SUPABASE_STORAGE_BUCKET_set": bool(supabase_bucket),
         "GEMINI_API_KEY_set": bool(os.environ.get("GEMINI_API_KEY")),
