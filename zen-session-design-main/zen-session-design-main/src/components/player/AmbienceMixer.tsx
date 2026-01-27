@@ -6,13 +6,6 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -50,6 +43,29 @@ const binauralOptions: { value: BinauralType; label: string }[] = [
 
 function pctTo01(pct: number): number {
   return Math.max(0, Math.min(1, (Number(pct) || 0) / 100));
+}
+
+function NativeSelect(props: {
+  value: string;
+  onChange: (next: string) => void;
+  disabled?: boolean;
+  options: Array<{ value: string; label: string }>;
+}) {
+  const { value, onChange, disabled, options } = props;
+  return (
+    <select
+      className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
 }
 
 export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false }: Props) {
@@ -499,22 +515,15 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="md:col-span-2 space-y-2">
                   <Label>Musique (Ambiance 1..4)</Label>
-                  <Select
+                  <NativeSelect
                     value={musicTrackId}
-                    onValueChange={(v: MusicTrackId) => setMusicTrackId(v)}
+                    onChange={(v) => setMusicTrackId(v as MusicTrackId)}
                     disabled={!playMusic || isPlaying}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {MUSIC_TRACKS.map((t, idx) => (
-                        <SelectItem key={t.id} value={t.id}>
-                          {`Ambiance ${idx + 1}`} — {t.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    options={MUSIC_TRACKS.map((t, idx) => ({
+                      value: t.id,
+                      label: `Ambiance ${idx + 1} — ${t.label}`,
+                    }))}
+                  />
                   <div className="text-xs text-muted-foreground">
                     Source: <code>/library/music/user/</code>
                   </div>
@@ -556,22 +565,12 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="md:col-span-2 space-y-2">
                   <Label>Type</Label>
-                  <Select
+                  <NativeSelect
                     value={ambianceType}
-                    onValueChange={(v: AmbianceType) => setAmbianceType(v)}
+                    onChange={(v) => setAmbianceType(v as AmbianceType)}
                     disabled={!playNoise || isPlaying}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ambianceOptions.map((o) => (
-                        <SelectItem key={o.value} value={o.value}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    options={ambianceOptions.map((o) => ({ value: o.value, label: o.label }))}
+                  />
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -610,22 +609,12 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="md:col-span-2 space-y-2">
                   <Label>Type</Label>
-                  <Select
+                  <NativeSelect
                     value={binauralType}
-                    onValueChange={(v: BinauralType) => setBinauralType(v)}
+                    onChange={(v) => setBinauralType(v as BinauralType)}
                     disabled={!playBinaural || binauralDisabled || isPlaying}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {binauralOptions.map((o) => (
-                        <SelectItem key={o.value} value={o.value}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    options={binauralOptions.map((o) => ({ value: o.value, label: o.label }))}
+                  />
                   {!binauralUrl ? (
                     <div className="text-xs text-muted-foreground">
                       Génère/charge une session pour activer la piste binaurale.
