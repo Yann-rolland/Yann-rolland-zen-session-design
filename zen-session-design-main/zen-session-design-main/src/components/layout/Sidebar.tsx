@@ -19,8 +19,6 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
-const SS_ADMIN_TOKEN = "bn3_admin_token_v1";
-
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
@@ -34,22 +32,12 @@ const navItems = [
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const location = useLocation();
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout } = useAuth();
   const { settings, updateSettings } = useApp();
 
-  // Le lien "Admin" est visible uniquement pour les comptes admin.
-  // L'accès réel aux données reste protégé par ADMIN_TOKEN côté backend.
-  const hasAdminToken = React.useMemo(() => {
-    try {
-      return Boolean(sessionStorage.getItem(SS_ADMIN_TOKEN) || "");
-    } catch {
-      return false;
-    }
-  }, []);
-
-  const allNavItems = (isAdmin || hasAdminToken)
-    ? [...navItems, { to: "/admin/settings", icon: Shield, label: "Admin" }]
-    : navItems;
+  // Always show Admin entry. Actual access is protected by the code (x-admin-token) on the backend.
+  // This avoids a dead-end where an admin cannot reach the page to enter the code the first time.
+  const allNavItems = [...navItems, { to: "/admin/settings", icon: Shield, label: "Admin" }];
 
   return (
     <aside

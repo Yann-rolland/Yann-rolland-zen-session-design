@@ -3,8 +3,6 @@ import { cn } from "@/lib/utils";
 import { Clock, Home, Settings, Shield, User } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 
-const SS_ADMIN_TOKEN = "bn3_admin_token_v1";
-
 const navItems = [
   { to: "/", icon: Home, label: "Accueil" },
   { to: "/history", icon: Clock, label: "Historique" },
@@ -13,21 +11,10 @@ const navItems = [
 
 export function BottomNav() {
   const location = useLocation();
-  const { isAuthenticated, isAdmin } = useAuth();
+  const { isAuthenticated } = useAuth();
 
-  // Le lien "Admin" est visible uniquement pour les comptes admin.
-  // L'accès réel aux données reste protégé par ADMIN_TOKEN côté backend.
-  const hasAdminToken = (() => {
-    try {
-      return Boolean(sessionStorage.getItem(SS_ADMIN_TOKEN) || "");
-    } catch {
-      return false;
-    }
-  })();
-
-  const allNavItems = (isAdmin || hasAdminToken)
-    ? [...navItems, { to: "/admin/settings", icon: Shield, label: "Admin" }]
-    : navItems;
+  // Always show Admin entry. Actual access is protected by the code (x-admin-token) on the backend.
+  const allNavItems = [...navItems, { to: "/admin/settings", icon: Shield, label: "Admin" }];
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden">
