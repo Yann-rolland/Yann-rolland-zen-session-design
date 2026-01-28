@@ -582,14 +582,38 @@ async def admin_storage_upload(
     if not storage_enabled():
         raise HTTPException(status_code=503, detail="Storage disabled (SUPABASE_* missing)")
 
+    # Basic hardening: validate destination key and file type
+    key_str = str(key or "").strip()
+    if not key_str:
+        raise HTTPException(status_code=400, detail="Missing key")
+    key_lower = key_str.lower()
+    if not (
+        key_lower.endswith(".mp3")
+        or key_lower.endswith(".wav")
+        or key_lower.endswith(".ogg")
+        or key_lower.endswith(".webm")
+    ):
+        raise HTTPException(status_code=400, detail="Invalid extension (allowed: .mp3, .wav, .ogg, .webm)")
+
     data = await file.read()
     if not data:
         raise HTTPException(status_code=400, detail="Empty upload")
     if len(data) > 50 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large (max 50MB)")
 
-    ct = (file.content_type or "").strip() or "audio/mpeg"
-    res = upload_object(key, data, content_type=ct, upsert=True)
+    # Content-type best effort + magic bytes sniffing (prevents HTML/text upload by mistake)
+    ct = (file.content_type or "").strip().lower()
+    head = bytes(data[:16] or b"")
+    is_mp3 = head.startswith(b"ID3") or (len(head) >= 2 and head[0] == 0xFF and (head[1] & 0xE0) == 0xE0)
+    is_wav = head.startswith(b"RIFF") and (b"WAVE" in head)
+    is_ogg = head.startswith(b"OggS")
+    is_webm = head.startswith(b"\x1a\x45\xdf\xa3")  # EBML
+    if not any([is_mp3, is_wav, is_ogg, is_webm]):
+        raise HTTPException(status_code=400, detail="File does not look like a supported audio format")
+    if not ct:
+        ct = "audio/mpeg" if is_mp3 else ("audio/wav" if is_wav else ("audio/ogg" if is_ogg else "audio/webm"))
+
+    res = upload_object(key_str, data, content_type=ct, upsert=True)
     if not res.get("ok"):
         raise HTTPException(status_code=400, detail=res.get("error") or "Upload failed")
     # Best-effort: auto-create metadata row for easier catalog curation (if DB enabled).

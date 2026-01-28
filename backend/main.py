@@ -7,6 +7,8 @@ from fastapi.responses import RedirectResponse
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 
 from api import router as api_router
 import api as api_module
@@ -47,6 +49,100 @@ app = FastAPI(
     description="MVP local de génération de sessions hypnotiques (texte + audio).",
     version="0.1.0",
 )
+
+# --- Security hardening (baseline) ---
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        resp: Response = await call_next(request)
+        # Basic hardening headers (safe for API responses).
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resp.headers.setdefault("X-Frame-Options", "DENY")
+        resp.headers.setdefault("Referrer-Policy", "no-referrer")
+        resp.headers.setdefault(
+            "Permissions-Policy",
+            "geolocation=(), microphone=(), camera=(), payment=(), usb=(), interest-cohort=()",
+        )
+        # Only set HSTS when served over HTTPS (Render/Vercel). Avoid breaking local dev.
+        try:
+            if (request.url.scheme or "").lower() == "https":
+                resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        except Exception:
+            pass
+        return resp
+
+
+class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app, *, max_bytes: int = 60 * 1024 * 1024):
+        super().__init__(app)
+        self.max_bytes = int(max_bytes)
+
+    async def dispatch(self, request, call_next):
+        # Best effort: use Content-Length if present.
+        try:
+            cl = request.headers.get("content-length")
+            if cl and int(cl) > self.max_bytes:
+                return Response("Request too large", status_code=413)
+        except Exception:
+            pass
+        return await call_next(request)
+
+
+# Apply hardening middlewares early.
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestSizeLimitMiddleware, max_bytes=int(os.environ.get("MAX_REQUEST_BYTES", "62914560")))
+
+# Lightweight in-memory rate limiting (single instance). Configure via env:
+# - RATE_LIMIT_RPM: requests per minute per IP per bucket (default: 120)
+# - RATE_LIMIT_ADMIN_RPM: stricter admin routes (default: 60)
+class SimpleRateLimitMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app):
+        super().__init__(app)
+        self._hits = {}  # (bucket, ip) -> (window_start_s, count)
+        self._rpm = int(os.environ.get("RATE_LIMIT_RPM", "120"))
+        self._admin_rpm = int(os.environ.get("RATE_LIMIT_ADMIN_RPM", "60"))
+
+    def _key(self, request) -> tuple[str, str]:
+        path = str(getattr(request.url, "path", "") or "")
+        if path.startswith("/admin/"):
+            bucket = "admin"
+        elif path.startswith("/generate"):
+            bucket = "generate"
+        elif path.startswith("/chat"):
+            bucket = "chat"
+        elif path.startswith("/feedback/"):
+            bucket = "feedback"
+        else:
+            bucket = "other"
+        ip = ""
+        try:
+            ip = getattr(getattr(request, "client", None), "host", "") or ""
+        except Exception:
+            ip = ""
+        # If behind proxy, you can enable trusting X-Forwarded-For via your reverse proxy settings.
+        # We keep it simple and do not trust XFF by default.
+        return (bucket, ip or "unknown")
+
+    async def dispatch(self, request, call_next):
+        bucket, ip = self._key(request)
+        # Only limit sensitive buckets to avoid breaking static files.
+        if bucket not in ("admin", "generate", "chat", "feedback"):
+            return await call_next(request)
+
+        limit = self._admin_rpm if bucket == "admin" else self._rpm
+        now = __import__("time").time()
+        win = 60.0
+        k = (bucket, ip)
+        start, count = self._hits.get(k, (now, 0))
+        if now - float(start) >= win:
+            start, count = now, 0
+        count += 1
+        self._hits[k] = (start, count)
+        if count > limit:
+            return Response("Rate limit exceeded", status_code=429)
+        return await call_next(request)
+
+
+app.add_middleware(SimpleRateLimitMiddleware)
 
 # Initialise DB (Supabase/Postgres) si DATABASE_URL est défini
 try:
