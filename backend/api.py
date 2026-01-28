@@ -186,6 +186,7 @@ def debug_env():
         cors_preview_regex = None
 
     supabase_url = (os.environ.get("SUPABASE_URL") or "").strip()
+    supabase_service_key = (os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
     supabase_bucket = (os.environ.get("SUPABASE_STORAGE_BUCKET") or "").strip()
 
     return {
@@ -204,6 +205,7 @@ def debug_env():
         "CORS_ORIGINS": allow_origins,
         "CORS_VERCEL_PREVIEW_REGEX": cors_preview_regex,
         "SUPABASE_URL_set": bool(supabase_url),
+        "SUPABASE_SERVICE_ROLE_KEY_set": bool(supabase_service_key),
         "SUPABASE_STORAGE_BUCKET_set": bool(supabase_bucket),
         "GEMINI_API_KEY_set": bool(os.environ.get("GEMINI_API_KEY")),
         "FREESOUND_API_KEY_set": bool(os.environ.get("FREESOUND_API_KEY")),
