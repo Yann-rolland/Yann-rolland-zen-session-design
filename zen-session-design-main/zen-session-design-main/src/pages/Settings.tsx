@@ -7,18 +7,31 @@ import { SessionConfigPanel } from "@/components/session/SessionConfig";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProgressionTab } from "@/components/settings/ProgressionTab";
 import { WellBeingTab } from "@/components/settings/WellBeingTab";
-import { Moon, Eye, Settings as SettingsIcon, Volume2, Bell, Zap } from "lucide-react";
+import { Moon, Eye, Settings as SettingsIcon, Volume2, Bell, Zap, Shield, Music2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { NavLink } from "react-router-dom";
+
+const SS_ADMIN_TOKEN = "bn3_admin_token_v1";
 
 export default function Settings() {
   const { settings, updateSettings, defaultConfig, updateDefaultConfig } = useApp();
+  const [adminToken, setAdminToken] = React.useState<string>(() => {
+    try {
+      return sessionStorage.getItem(SS_ADMIN_TOKEN) || "";
+    } catch {
+      return "";
+    }
+  });
+  const [adminTokenSaved, setAdminTokenSaved] = React.useState<boolean>(false);
 
   return (
     <div className="space-y-6 fade-in">
       <h1 className="text-2xl font-bold">Réglages</h1>
 
       <Tabs defaultValue="settings">
-        <TabsList className="w-full justify-between">
+        <TabsList className="w-full grid grid-cols-4">
           <TabsTrigger value="settings" className="flex-1 justify-center">
             Paramètres
           </TabsTrigger>
@@ -27,6 +40,9 @@ export default function Settings() {
           </TabsTrigger>
           <TabsTrigger value="wellbeing" className="flex-1 justify-center">
             Bien-être
+          </TabsTrigger>
+          <TabsTrigger value="admin" className="flex-1 justify-center">
+            Admin
           </TabsTrigger>
         </TabsList>
 
@@ -146,6 +162,72 @@ export default function Settings() {
 
         <TabsContent value="wellbeing" className="mt-6">
           <WellBeingTab />
+        </TabsContent>
+
+        <TabsContent value="admin" className="space-y-6 mt-6">
+          <GlassCard padding="lg">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-lg font-semibold">
+                <Shield className="w-5 h-5 text-primary" />
+                <h2>Administration</h2>
+              </div>
+              <Separator className="bg-border/50" />
+
+              <div className="grid gap-4 md:grid-cols-3 items-end pt-2">
+                <div className="md:col-span-2">
+                  <Label htmlFor="adminToken" className="text-base">Code admin</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Stocké uniquement dans cette session navigateur (sessionStorage).
+                  </p>
+                  <Input
+                    id="adminToken"
+                    value={adminToken}
+                    onChange={(e) => {
+                      setAdminToken(e.target.value);
+                      setAdminTokenSaved(false);
+                    }}
+                    placeholder="ADMIN_TOKEN"
+                    className="mt-2"
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    onClick={() => {
+                      try {
+                        sessionStorage.setItem(SS_ADMIN_TOKEN, adminToken.trim());
+                        setAdminTokenSaved(true);
+                      } catch {
+                        setAdminTokenSaved(false);
+                      }
+                    }}
+                    disabled={!adminToken.trim()}
+                  >
+                    Enregistrer
+                  </Button>
+                </div>
+              </div>
+              {adminTokenSaved ? (
+                <div className="text-sm text-muted-foreground">
+                  Code enregistré pour cette session.
+                </div>
+              ) : null}
+
+              <div className="grid gap-3 md:grid-cols-2 pt-2">
+                <Button asChild variant="secondary">
+                  <NavLink to="/admin/settings" className="flex items-center justify-center gap-2">
+                    <Shield className="w-4 h-4" />
+                    Admin · Paramètres
+                  </NavLink>
+                </Button>
+                <Button asChild variant="secondary">
+                  <NavLink to="/admin/library" className="flex items-center justify-center gap-2">
+                    <Music2 className="w-4 h-4" />
+                    Admin · Audio (bibliothèque)
+                  </NavLink>
+                </Button>
+              </div>
+            </div>
+          </GlassCard>
         </TabsContent>
       </Tabs>
     </div>
