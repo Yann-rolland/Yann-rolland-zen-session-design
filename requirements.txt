@@ -9,4 +9,5 @@ pyttsx3==2.90
 # Render currently uses Python 3.13. Use a psycopg[binary] version that ships cp313 wheels.
 psycopg[binary]==3.3.2
 python-dotenv==1.0.1
+python-multipart==0.0.9
 
