@@ -47,3 +47,39 @@ Contraintes:
 Réponds uniquement avec le JSON parsable.
 """
 
+
+def build_prompt_with_overrides(
+    req: GenerationRequest,
+    *,
+    safety_rules_text: str = "",
+    prompt_template_override: str = "",
+) -> str:
+    """
+    Optional admin-controlled shaping:
+    - safety_rules_text: appended as extra constraints
+    - prompt_template_override: if provided, replaces the whole template.
+      Available placeholders:
+        {objectif}, {duree_minutes}, {style}, {pnl_clause}
+    """
+    pnl_clause = "; ".join(PNL_PHRASES)
+    safety = (safety_rules_text or "").strip()
+    tpl = (prompt_template_override or "").strip()
+
+    if tpl:
+        try:
+            base = tpl.format(
+                objectif=req.objectif,
+                duree_minutes=req.duree_minutes,
+                style=req.style,
+                pnl_clause=pnl_clause,
+            )
+        except Exception:
+            # If formatting fails, fallback to default prompt
+            base = build_prompt(req)
+    else:
+        base = build_prompt(req)
+
+    if safety:
+        base = base.rstrip() + "\n\nContraintes sécurité (admin, prioritaire):\n" + safety + "\n"
+    return base
+

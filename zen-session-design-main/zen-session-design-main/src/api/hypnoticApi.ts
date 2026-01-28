@@ -384,6 +384,11 @@ export async function adminWellbeingStats(adminToken: string, days = 30): Promis
 
 export interface AdminAppConfig {
   forced_generation_text: string;
+  gemini_model_default?: string;
+  chat_model_default?: string;
+  elevenlabs_voice_id_default?: string;
+  safety_rules_text?: string;
+  prompt_template_override?: string;
   updated_at?: string;
 }
 
@@ -400,7 +405,15 @@ export async function adminGetAppConfig(adminToken: string): Promise<{ config: A
 
 export async function adminSaveAppConfig(
   adminToken: string,
-  payload: { forced_generation_text?: string; action?: "save" | "rollback" | "reset" },
+  payload: {
+    action?: "save" | "rollback" | "reset";
+    forced_generation_text?: string;
+    gemini_model_default?: string;
+    chat_model_default?: string;
+    elevenlabs_voice_id_default?: string;
+    safety_rules_text?: string;
+    prompt_template_override?: string;
+  },
 ): Promise<{ ok: boolean; action: string; config: AdminAppConfig }> {
   const base = getApiBase();
   const url = joinUrl(base, `/admin/app_config`);
@@ -408,6 +421,90 @@ export async function adminSaveAppConfig(
     method: "POST",
     headers: { "Content-Type": "application/json", "x-admin-token": adminToken },
     body: JSON.stringify(payload || {}),
+  });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
+  }
+  return res.json();
+}
+
+export type AdminStorageExpected = {
+  enabled: boolean;
+  bucket?: string | null;
+  expected: { music: Record<string, string>; ambiences: Record<string, string> };
+  catalog: { enabled: boolean; bucket?: string | null; signed_expires_in?: number; music: Record<string, string>; ambiences: Record<string, string> };
+};
+
+export async function adminStorageExpected(adminToken: string): Promise<AdminStorageExpected> {
+  const base = getApiBase();
+  const url = joinUrl(base, `/admin/storage/expected`);
+  const res = await fetch(url, { method: "GET", headers: { "x-admin-token": adminToken } });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
+  }
+  return res.json();
+}
+
+export async function adminStorageList(
+  adminToken: string,
+  params?: { prefix?: string; limit?: number; offset?: number },
+): Promise<{ enabled: boolean; items: any[] }> {
+  const base = getApiBase();
+  const sp = new URLSearchParams();
+  if (params?.prefix) sp.set("prefix", params.prefix);
+  if (params?.limit != null) sp.set("limit", String(params.limit));
+  if (params?.offset != null) sp.set("offset", String(params.offset));
+  const url = joinUrl(base, `/admin/storage/list?${sp.toString()}`);
+  const res = await fetch(url, { method: "GET", headers: { "x-admin-token": adminToken } });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
+  }
+  return res.json();
+}
+
+export async function adminStorageUpload(adminToken: string, key: string, file: File): Promise<{ ok: boolean; key: string }> {
+  const base = getApiBase();
+  const url = joinUrl(base, `/admin/storage/upload`);
+  const fd = new FormData();
+  fd.append("key", key);
+  fd.append("file", file);
+  const res = await fetch(url, { method: "POST", headers: { "x-admin-token": adminToken }, body: fd });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
+  }
+  return res.json();
+}
+
+export async function adminStorageMove(
+  adminToken: string,
+  source: string,
+  dest: string,
+): Promise<{ ok: boolean; source: string; dest: string }> {
+  const base = getApiBase();
+  const url = joinUrl(base, `/admin/storage/move`);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-admin-token": adminToken },
+    body: JSON.stringify({ source, dest }),
+  });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
+  }
+  return res.json();
+}
+
+export async function adminStorageDelete(adminToken: string, key: string): Promise<{ ok: boolean; key: string }> {
+  const base = getApiBase();
+  const url = joinUrl(base, `/admin/storage/delete`);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-admin-token": adminToken },
+    body: JSON.stringify({ key }),
   });
   if (!res.ok) {
     const msg = await res.text().catch(() => "");

@@ -10,11 +10,23 @@ from typing import Any, Dict, Optional, Tuple
 @dataclass(frozen=True)
 class AdminAppConfig:
     forced_generation_text: str = ""
+    # Defaults (used when client does not provide an explicit value)
+    gemini_model_default: str = ""
+    chat_model_default: str = ""
+    elevenlabs_voice_id_default: str = ""
+    # Safety / prompt shaping
+    safety_rules_text: str = ""
+    prompt_template_override: str = ""
     updated_at: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "forced_generation_text": self.forced_generation_text,
+            "gemini_model_default": self.gemini_model_default,
+            "chat_model_default": self.chat_model_default,
+            "elevenlabs_voice_id_default": self.elevenlabs_voice_id_default,
+            "safety_rules_text": self.safety_rules_text,
+            "prompt_template_override": self.prompt_template_override,
             "updated_at": self.updated_at,
         }
 
@@ -50,6 +62,37 @@ def _sanitize_text(s: str) -> str:
     return s
 
 
+def _sanitize_short(s: str, *, max_len: int = 128) -> str:
+    s = (s or "").replace("\x00", "").strip()
+    if len(s) > max_len:
+        s = s[:max_len]
+    return s
+
+
+def _merge_config(prev: AdminAppConfig, updates: Dict[str, Any]) -> AdminAppConfig:
+    u = updates or {}
+    return AdminAppConfig(
+        forced_generation_text=_sanitize_text(str(u.get("forced_generation_text") if u.get("forced_generation_text") is not None else prev.forced_generation_text)),
+        gemini_model_default=_sanitize_short(
+            str(u.get("gemini_model_default") if u.get("gemini_model_default") is not None else prev.gemini_model_default),
+            max_len=64,
+        ),
+        chat_model_default=_sanitize_short(
+            str(u.get("chat_model_default") if u.get("chat_model_default") is not None else prev.chat_model_default),
+            max_len=64,
+        ),
+        elevenlabs_voice_id_default=_sanitize_short(
+            str(u.get("elevenlabs_voice_id_default") if u.get("elevenlabs_voice_id_default") is not None else prev.elevenlabs_voice_id_default),
+            max_len=128,
+        ),
+        safety_rules_text=_sanitize_text(str(u.get("safety_rules_text") if u.get("safety_rules_text") is not None else prev.safety_rules_text)),
+        prompt_template_override=_sanitize_text(
+            str(u.get("prompt_template_override") if u.get("prompt_template_override") is not None else prev.prompt_template_override)
+        ),
+        updated_at=_now_iso(),
+    )
+
+
 # Small in-process cache
 _CACHE: Dict[str, Any] = {"at": 0.0, "data": None}
 
@@ -62,25 +105,31 @@ def load_admin_app_config(*, cache_ttl_s: int = 10) -> AdminAppConfig:
 
     cfg_path, _prev, _hist = _paths()
     if not cfg_path.exists():
-        cfg = AdminAppConfig(forced_generation_text="", updated_at="")
+        cfg = AdminAppConfig()
         _CACHE["at"] = now
         _CACHE["data"] = cfg
         return cfg
 
     try:
         raw = json.loads(cfg_path.read_text(encoding="utf-8"))
-        forced = _sanitize_text(str(raw.get("forced_generation_text") or ""))
-        updated_at = str(raw.get("updated_at") or "")
-        cfg = AdminAppConfig(forced_generation_text=forced, updated_at=updated_at)
+        cfg = AdminAppConfig(
+            forced_generation_text=_sanitize_text(str(raw.get("forced_generation_text") or "")),
+            gemini_model_default=_sanitize_short(str(raw.get("gemini_model_default") or ""), max_len=64),
+            chat_model_default=_sanitize_short(str(raw.get("chat_model_default") or ""), max_len=64),
+            elevenlabs_voice_id_default=_sanitize_short(str(raw.get("elevenlabs_voice_id_default") or ""), max_len=128),
+            safety_rules_text=_sanitize_text(str(raw.get("safety_rules_text") or "")),
+            prompt_template_override=_sanitize_text(str(raw.get("prompt_template_override") or "")),
+            updated_at=str(raw.get("updated_at") or ""),
+        )
     except Exception:
-        cfg = AdminAppConfig(forced_generation_text="", updated_at="")
+        cfg = AdminAppConfig()
 
     _CACHE["at"] = now
     _CACHE["data"] = cfg
     return cfg
 
 
-def save_admin_app_config(new_forced_text: str) -> AdminAppConfig:
+def save_admin_app_config(updates: Dict[str, Any]) -> AdminAppConfig:
     """
     Save config with rollback protection:
     - write previous config to *.prev.json
@@ -89,9 +138,8 @@ def save_admin_app_config(new_forced_text: str) -> AdminAppConfig:
     """
     cfg_path, prev_path, hist_path = _paths()
 
-    forced = _sanitize_text(new_forced_text)
-    updated_at = _now_iso()
-    next_cfg = AdminAppConfig(forced_generation_text=forced, updated_at=updated_at)
+    prev = load_admin_app_config(cache_ttl_s=0)
+    next_cfg = _merge_config(prev, updates or {})
 
     # Backup previous config (best effort)
     try:
@@ -109,7 +157,7 @@ def save_admin_app_config(new_forced_text: str) -> AdminAppConfig:
     try:
         hist_path.parent.mkdir(parents=True, exist_ok=True)
         with hist_path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps({"at": updated_at, **next_cfg.to_dict()}, ensure_ascii=False) + "\n")
+            f.write(json.dumps({"at": next_cfg.updated_at, **next_cfg.to_dict()}, ensure_ascii=False) + "\n")
     except Exception:
         pass
 
@@ -133,5 +181,14 @@ def rollback_admin_app_config() -> AdminAppConfig:
 
 
 def reset_admin_app_config() -> AdminAppConfig:
-    return save_admin_app_config("")
+    return save_admin_app_config(
+        {
+            "forced_generation_text": "",
+            "gemini_model_default": "",
+            "chat_model_default": "",
+            "elevenlabs_voice_id_default": "",
+            "safety_rules_text": "",
+            "prompt_template_override": "",
+        }
+    )
 

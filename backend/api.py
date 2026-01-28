@@ -20,7 +20,7 @@ from db import (
     list_chat_messages,
     clear_chat_messages,
 )
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from llm import DEFAULT_SECTIONS, debug_ollama_once
 from llm_gemini import list_gemini_models
@@ -35,10 +35,18 @@ from models import (
     WellBeingFeedback,
 )
 from music import generate_music_bed
-from prompts import build_prompt
+from prompts import build_prompt_with_overrides
 from tts import synthesize_tts_cached
 from urllib.parse import urlparse
-from supabase_storage import build_default_catalog, storage_enabled
+from supabase_storage import (
+    build_default_catalog,
+    delete_object,
+    expected_audio_paths,
+    list_objects,
+    move_object,
+    storage_enabled,
+    upload_object,
+)
 from supabase_auth import get_current_user
 from admin_app_config import load_admin_app_config, rollback_admin_app_config, save_admin_app_config, reset_admin_app_config
 from llm_gemini import chat_gemini
@@ -352,7 +360,13 @@ async def chat(payload: ChatRequest, request: Request):
         pass
 
     try:
-        reply = await chat_gemini(msgs, model=str(payload.model or "gemini-pro-latest"))
+        try:
+            cfg = load_admin_app_config()
+            default_model = (cfg.chat_model_default or "").strip()
+        except Exception:
+            default_model = ""
+        model = str(payload.model or "").strip() or default_model or "gemini-pro-latest"
+        reply = await chat_gemini(msgs, model=model)
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Chat error: {_redact_secrets(str(e))}")
 
@@ -429,9 +443,104 @@ async def admin_save_app_config(request: Request):
         cfg = reset_admin_app_config()
         return {"ok": True, "action": "reset", "config": cfg.to_dict()}
 
-    forced = str((payload or {}).get("forced_generation_text") or "")
-    cfg = save_admin_app_config(forced)
+    updates = dict(payload or {})
+    updates.pop("updated_at", None)
+    cfg = save_admin_app_config(updates)
     return {"ok": True, "action": "save", "config": cfg.to_dict()}
+
+
+@router.get("/admin/storage/expected")
+def admin_storage_expected(request: Request):
+    """
+    Helper endpoint for admin UI: returns expected audio keys + current catalog presence.
+    """
+    _require_admin(request)
+    return {
+        "enabled": storage_enabled(),
+        "bucket": os.environ.get("SUPABASE_STORAGE_BUCKET"),
+        "expected": expected_audio_paths(),
+        "catalog": build_default_catalog() if storage_enabled() else {"enabled": False, "music": {}, "ambiences": {}},
+    }
+
+
+@router.get("/admin/storage/list")
+def admin_storage_list(request: Request, prefix: str = "", limit: int = 200, offset: int = 0):
+    """
+    Lists objects from Supabase Storage bucket (admin only).
+    """
+    _require_admin(request)
+    if not storage_enabled():
+        return {"enabled": False, "items": []}
+    items = list_objects(prefix=prefix, limit=limit, offset=offset)
+    return {"enabled": True, "items": items}
+
+
+@router.post("/admin/storage/upload")
+async def admin_storage_upload(
+    request: Request,
+    key: str = Form(...),
+    file: UploadFile = File(...),
+):
+    """
+    Upload an audio file to Supabase Storage via backend (admin only).
+    Uses service role key server-side; the frontend never sees it.
+    """
+    _require_admin(request)
+    if not storage_enabled():
+        raise HTTPException(status_code=503, detail="Storage disabled (SUPABASE_* missing)")
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty upload")
+    if len(data) > 50 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large (max 50MB)")
+
+    ct = (file.content_type or "").strip() or "audio/mpeg"
+    res = upload_object(key, data, content_type=ct, upsert=True)
+    if not res.get("ok"):
+        raise HTTPException(status_code=400, detail=res.get("error") or "Upload failed")
+    return {"ok": True, "key": res.get("key")}
+
+
+@router.post("/admin/storage/move")
+async def admin_storage_move(request: Request):
+    """
+    Move/rename an object in Supabase Storage (admin only).
+    Body: { "source": "...", "dest": "..." }
+    """
+    _require_admin(request)
+    if not storage_enabled():
+        raise HTTPException(status_code=503, detail="Storage disabled (SUPABASE_* missing)")
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    src = str((payload or {}).get("source") or "")
+    dst = str((payload or {}).get("dest") or "")
+    res = move_object(src, dst)
+    if not res.get("ok"):
+        raise HTTPException(status_code=400, detail=res.get("error") or "Move failed")
+    return {"ok": True, "source": res.get("source"), "dest": res.get("dest")}
+
+
+@router.post("/admin/storage/delete")
+async def admin_storage_delete(request: Request):
+    """
+    Delete an object in Supabase Storage (admin only).
+    Body: { "key": "..." }
+    """
+    _require_admin(request)
+    if not storage_enabled():
+        raise HTTPException(status_code=503, detail="Storage disabled (SUPABASE_* missing)")
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    key = str((payload or {}).get("key") or "")
+    res = delete_object(key)
+    if not res.get("ok"):
+        raise HTTPException(status_code=400, detail=res.get("error") or "Delete failed")
+    return {"ok": True, "key": res.get("key")}
 @router.post("/feedback/wellbeing")
 async def feedback_wellbeing(payload: WellBeingFeedback, request: Request):
     """
@@ -814,11 +923,41 @@ async def generate(request: GenerationRequest, http_request: Request):
     legacy_mix_abs = base_dir / "assets/audio/mix.wav"
 
     try:
-        prompt = build_prompt(request)
-        # Admin override: force an additional instruction to steer the LLM.
+        # Admin config: extra safety rules + optional template + defaults
         try:
             cfg = load_admin_app_config()
-            forced = (cfg.forced_generation_text or "").strip()
+        except Exception:
+            cfg = None
+
+        try:
+            # Default model overrides (only if client didn't explicitly set something custom)
+            prov = getattr(request, "llm_provider", "ollama")
+            llm_provider = getattr(prov, "value", str(prov))
+            if llm_provider == "gemini":
+                default_model = (getattr(cfg, "gemini_model_default", "") or "").strip()
+                if default_model and (not str(getattr(request, "gemini_model", "") or "").strip() or str(getattr(request, "gemini_model", "")).strip() == "gemini-pro-latest"):
+                    request.gemini_model = default_model
+        except Exception:
+            pass
+
+        try:
+            prov = getattr(request, "tts_provider", "local")
+            tts_provider = getattr(prov, "value", str(prov))
+            if tts_provider == "elevenlabs":
+                default_voice_id = (getattr(cfg, "elevenlabs_voice_id_default", "") or "").strip()
+                if default_voice_id and not str(getattr(request, "elevenlabs_voice_id", "") or "").strip():
+                    request.elevenlabs_voice_id = default_voice_id
+        except Exception:
+            pass
+
+        prompt = build_prompt_with_overrides(
+            request,
+            safety_rules_text=str(getattr(cfg, "safety_rules_text", "") or ""),
+            prompt_template_override=str(getattr(cfg, "prompt_template_override", "") or ""),
+        )
+        # Admin override: force an additional instruction to steer the LLM.
+        try:
+            forced = (getattr(cfg, "forced_generation_text", "") or "").strip()
             if forced:
                 prompt = f"INSTRUCTION ADMIN (prioritaire, à respecter strictement):\n{forced}\n\n---\n\n{prompt}"
         except Exception:

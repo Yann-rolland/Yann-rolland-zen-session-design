@@ -14,8 +14,12 @@ export function BottomNav() {
   const location = useLocation();
   const { isAuthenticated } = useAuth();
 
-  // Always show Admin entry. Actual access is protected by the code (x-admin-token) on the backend.
-  const allNavItems = [...navItems, { to: "/admin/settings", icon: Shield, label: "Admin" }];
+  // Always show Admin entries. Actual access is protected by the code (x-admin-token) on the backend.
+  const allNavItems = [
+    ...navItems,
+    { to: "/admin/settings", icon: Shield, label: "Admin" },
+    { to: "/admin/library", icon: Shield, label: "Audio" },
+  ];
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden">

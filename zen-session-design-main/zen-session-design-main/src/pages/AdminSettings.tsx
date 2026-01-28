@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { adminGetAppConfig, adminSaveAppConfig } from "@/api/hypnoticApi";
 import { useToast } from "@/hooks/use-toast";
+import { NavLink } from "react-router-dom";
 
 const SS_ADMIN_TOKEN = "bn3_admin_token_v1";
 
@@ -20,6 +21,11 @@ export default function AdminSettings() {
     }
   });
   const [forcedText, setForcedText] = useState<string>("");
+  const [geminiModelDefault, setGeminiModelDefault] = useState<string>("");
+  const [chatModelDefault, setChatModelDefault] = useState<string>("");
+  const [elevenlabsVoiceIdDefault, setElevenlabsVoiceIdDefault] = useState<string>("");
+  const [safetyRulesText, setSafetyRulesText] = useState<string>("");
+  const [promptTemplateOverride, setPromptTemplateOverride] = useState<string>("");
   const [updatedAt, setUpdatedAt] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>("");
@@ -33,6 +39,11 @@ export default function AdminSettings() {
     try {
       const res = await adminGetAppConfig(token.trim());
       setForcedText(res.config?.forced_generation_text || "");
+      setGeminiModelDefault(res.config?.gemini_model_default || "");
+      setChatModelDefault(res.config?.chat_model_default || "");
+      setElevenlabsVoiceIdDefault(res.config?.elevenlabs_voice_id_default || "");
+      setSafetyRulesText(res.config?.safety_rules_text || "");
+      setPromptTemplateOverride(res.config?.prompt_template_override || "");
       setUpdatedAt(res.config?.updated_at || "");
     } catch (e: any) {
       setError(e?.message || String(e));
@@ -71,8 +82,21 @@ export default function AdminSettings() {
     setIsLoading(true);
     setError("");
     try {
-      const res = await adminSaveAppConfig(token.trim(), { action: "save", forced_generation_text: forcedText });
+      const res = await adminSaveAppConfig(token.trim(), {
+        action: "save",
+        forced_generation_text: forcedText,
+        gemini_model_default: geminiModelDefault,
+        chat_model_default: chatModelDefault,
+        elevenlabs_voice_id_default: elevenlabsVoiceIdDefault,
+        safety_rules_text: safetyRulesText,
+        prompt_template_override: promptTemplateOverride,
+      });
       setForcedText(res.config?.forced_generation_text || "");
+      setGeminiModelDefault(res.config?.gemini_model_default || "");
+      setChatModelDefault(res.config?.chat_model_default || "");
+      setElevenlabsVoiceIdDefault(res.config?.elevenlabs_voice_id_default || "");
+      setSafetyRulesText(res.config?.safety_rules_text || "");
+      setPromptTemplateOverride(res.config?.prompt_template_override || "");
       setUpdatedAt(res.config?.updated_at || "");
       toast({ title: "Paramètres sauvegardés", description: "Ils seront appliqués aux prochaines générations." });
     } catch (e: any) {
@@ -89,6 +113,11 @@ export default function AdminSettings() {
     try {
       const res = await adminSaveAppConfig(token.trim(), { action: "rollback" });
       setForcedText(res.config?.forced_generation_text || "");
+      setGeminiModelDefault(res.config?.gemini_model_default || "");
+      setChatModelDefault(res.config?.chat_model_default || "");
+      setElevenlabsVoiceIdDefault(res.config?.elevenlabs_voice_id_default || "");
+      setSafetyRulesText(res.config?.safety_rules_text || "");
+      setPromptTemplateOverride(res.config?.prompt_template_override || "");
       setUpdatedAt(res.config?.updated_at || "");
       toast({ title: "Rollback OK", description: "Retour à la config précédente." });
     } catch (e: any) {
@@ -105,6 +134,11 @@ export default function AdminSettings() {
     try {
       const res = await adminSaveAppConfig(token.trim(), { action: "reset" });
       setForcedText(res.config?.forced_generation_text || "");
+      setGeminiModelDefault(res.config?.gemini_model_default || "");
+      setChatModelDefault(res.config?.chat_model_default || "");
+      setElevenlabsVoiceIdDefault(res.config?.elevenlabs_voice_id_default || "");
+      setSafetyRulesText(res.config?.safety_rules_text || "");
+      setPromptTemplateOverride(res.config?.prompt_template_override || "");
       setUpdatedAt(res.config?.updated_at || "");
       toast({ title: "Reset OK", description: "Config remise à zéro." });
     } catch (e: any) {
@@ -129,6 +163,11 @@ export default function AdminSettings() {
         <p className="text-muted-foreground">
           Accès protégé par un code admin (header <code>x-admin-token</code>). Les changements sont stockés côté backend avec rollback.
         </p>
+        <div className="mt-2 text-sm">
+          <NavLink to="/admin/library" className="text-primary hover:underline">
+            Aller à la bibliothèque audio →
+          </NavLink>
+        </div>
       </div>
 
       <GlassCard padding="lg">
@@ -192,6 +231,89 @@ export default function AdminSettings() {
             </div>
           </div>
           {error ? <div className="text-sm text-destructive">{error}</div> : null}
+        </div>
+      </GlassCard>
+
+      <GlassCard padding="lg">
+        <div className="space-y-4">
+          <div>
+            <div className="font-medium">Modèles par défaut</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Utilisés si le client ne spécifie pas explicitement un modèle (génération + chat).
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <Label htmlFor="geminiModelDefault">Gemini (génération) · modèle par défaut</Label>
+              <Input
+                id="geminiModelDefault"
+                value={geminiModelDefault}
+                onChange={(e) => setGeminiModelDefault(e.target.value)}
+                placeholder="ex: gemini-1.5-pro-latest"
+                className="mt-2"
+                disabled={!hasToken || isLoading}
+              />
+            </div>
+            <div>
+              <Label htmlFor="chatModelDefault">Gemini (chat) · modèle par défaut</Label>
+              <Input
+                id="chatModelDefault"
+                value={chatModelDefault}
+                onChange={(e) => setChatModelDefault(e.target.value)}
+                placeholder="ex: gemini-1.5-flash-latest"
+                className="mt-2"
+                disabled={!hasToken || isLoading}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <Label htmlFor="elevenlabsVoiceIdDefault">ElevenLabs · voice_id par défaut</Label>
+              <Input
+                id="elevenlabsVoiceIdDefault"
+                value={elevenlabsVoiceIdDefault}
+                onChange={(e) => setElevenlabsVoiceIdDefault(e.target.value)}
+                placeholder="UUID ElevenLabs (optionnel)"
+                className="mt-2"
+                disabled={!hasToken || isLoading}
+              />
+            </div>
+          </div>
+        </div>
+      </GlassCard>
+
+      <GlassCard padding="lg">
+        <div className="space-y-4">
+          <div>
+            <div className="font-medium">Règles de sécurité (admin)</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Ajoutées comme contraintes “prioritaires” au prompt de génération (utile pour filtrer des thèmes, ton, etc.).
+            </p>
+          </div>
+          <Textarea
+            value={safetyRulesText}
+            onChange={(e) => setSafetyRulesText(e.target.value)}
+            placeholder="Ex: Ne jamais faire de diagnostic médical. Éviter les injonctions dangereuses. Toujours rester bienveillant..."
+            className="min-h-[140px]"
+            disabled={!hasToken || isLoading}
+          />
+        </div>
+      </GlassCard>
+
+      <GlassCard padding="lg">
+        <div className="space-y-4">
+          <div>
+            <div className="font-medium">Template de prompt (override)</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Si rempli, remplace le template par défaut. Variables: <code>{"{objectif}"}</code>, <code>{"{duree_minutes}"}</code>,{" "}
+              <code>{"{style}"}</code>, <code>{"{pnl_clause}"}</code>.
+            </p>
+          </div>
+          <Textarea
+            value={promptTemplateOverride}
+            onChange={(e) => setPromptTemplateOverride(e.target.value)}
+            placeholder="Laisse vide pour utiliser le template standard."
+            className="min-h-[180px]"
+            disabled={!hasToken || isLoading}
+          />
         </div>
       </GlassCard>
     </div>

@@ -13,6 +13,7 @@ import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import AdminInsights from "./pages/AdminInsights";
 import AdminSettings from "./pages/AdminSettings";
+import AdminAudioLibrary from "./pages/AdminAudioLibrary";
 import Chat from "./pages/Chat";
 
 const queryClient = new QueryClient();
@@ -76,6 +77,14 @@ const App = () => (
                 element={
                   <AppLayout>
                     <AdminSettings />
+                  </AppLayout>
+                }
+              />
+              <Route
+                path="/admin/library"
+                element={
+                  <AppLayout>
+                    <AdminAudioLibrary />
                   </AppLayout>
                 }
               />
