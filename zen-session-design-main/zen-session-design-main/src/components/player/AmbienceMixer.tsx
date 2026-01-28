@@ -87,6 +87,8 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
   const [cloudCatalog, setCloudCatalog] = React.useState<{ music: Record<string, string>; ambiences: Record<string, string> } | null>(null);
   const [cloudCatalogStatus, setCloudCatalogStatus] = React.useState<"idle" | "loading" | "ready" | "error">("idle");
   const [cloudCatalogError, setCloudCatalogError] = React.useState<string>("");
+  const [lastMusicUrlDebug, setLastMusicUrlDebug] = React.useState<string>("");
+  const [lastMusicErrorDebug, setLastMusicErrorDebug] = React.useState<string>("");
   const isMountedRef = React.useRef(true);
   const stopTimeoutRef = React.useRef<number | null>(null);
   const stopTokenRef = React.useRef<number>(0);
@@ -105,6 +107,17 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
   const ambienceNodeRef = React.useRef<MediaElementAudioSourceNode | null>(null);
   const binauralNodeRef = React.useRef<MediaElementAudioSourceNode | null>(null);
   const noiseSrcRef = React.useRef<AudioBufferSourceNode | null>(null);
+  const musicErrorHandlerAttachedRef = React.useRef(false);
+
+  function redactSignedUrl(url: string): string {
+    try {
+      const u = new URL(url);
+      if (u.searchParams.has("token")) u.searchParams.set("token", "REDACTED");
+      return u.toString();
+    } catch {
+      return String(url || "");
+    }
+  }
 
   // Load cloud audio catalog (optional) - fallback to local /library if not configured.
   React.useEffect(() => {
@@ -294,6 +307,24 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
     musicElRef.current.crossOrigin = "anonymous";
     musicElRef.current.src = src;
     musicElRef.current.loop = true;
+    setLastMusicUrlDebug(redactSignedUrl(src));
+
+    if (!musicErrorHandlerAttachedRef.current) {
+      musicErrorHandlerAttachedRef.current = true;
+      musicElRef.current.addEventListener("error", () => {
+        try {
+          const err = musicElRef.current?.error;
+          // HTMLMediaElement error codes:
+          // 1=MEDIA_ERR_ABORTED, 2=NETWORK, 3=DECODE, 4=SRC_NOT_SUPPORTED
+          const code = err?.code;
+          const ns = (musicElRef.current as any)?.networkState;
+          const rs = (musicElRef.current as any)?.readyState;
+          setLastMusicErrorDebug(`music_error code=${code} networkState=${ns} readyState=${rs}`);
+        } catch {
+          setLastMusicErrorDebug("music_error (unknown)");
+        }
+      });
+    }
 
     if (!musicNodeRef.current) {
       musicNodeRef.current = ctx.createMediaElementSource(musicElRef.current);
@@ -546,6 +577,22 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
           </>
         ) : null}
       </div>
+
+      {(lastMusicUrlDebug || lastMusicErrorDebug) ? (
+        <div className="text-xs text-muted-foreground">
+          <div>
+            Music URL: <code className="break-words">{lastMusicUrlDebug || "—"}</code>
+          </div>
+          {lastMusicErrorDebug ? (
+            <div>
+              Debug: <code className="break-words">{lastMusicErrorDebug}</code>
+            </div>
+          ) : null}
+          <div className="mt-1">
+            Note: évite de partager des URLs signées (token). Ici on l’affiche masqué.
+          </div>
+        </div>
+      ) : null}
 
       {error ? (
         <div className="text-sm text-destructive">
