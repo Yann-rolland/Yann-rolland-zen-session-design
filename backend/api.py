@@ -19,6 +19,9 @@ from db import (
     insert_chat_message,
     list_chat_messages,
     clear_chat_messages,
+    upsert_audio_asset,
+    list_audio_assets,
+    delete_audio_asset,
 )
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -475,6 +478,89 @@ def admin_storage_list(request: Request, prefix: str = "", limit: int = 200, off
     return {"enabled": True, "items": items}
 
 
+@router.get("/admin/audio_assets")
+def admin_list_audio_assets(request: Request, kind: str | None = None, q: str | None = None, limit: int = 200, offset: int = 0):
+    """
+    List audio asset metadata stored in DB (admin only).
+    """
+    _require_admin(request)
+    if not db_enabled():
+        raise HTTPException(status_code=503, detail="DB disabled (DATABASE_URL/psycopg missing)")
+    try:
+        items = list_audio_assets(kind=kind, q=q, limit=limit, offset=offset)
+        return {"items": items}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"DB error: {e}")
+
+
+@router.post("/admin/audio_assets")
+async def admin_upsert_audio_assets(request: Request):
+    """
+    Upsert audio asset metadata by storage_key (admin only).
+    Body example:
+      {
+        "storage_key": "ambiences/ocean.mp3",
+        "kind": "ambience",
+        "title": "Océan doux",
+        "tags": ["ocean", "calm"],
+        "source": "freesound",
+        "license": "CC0",
+        "duration_s": 600,
+        "loudness_lufs": -18.5,
+        "notes": "",
+        "extra": { ... }
+      }
+    """
+    _require_admin(request)
+    if not db_enabled():
+        raise HTTPException(status_code=503, detail="DB disabled (DATABASE_URL/psycopg missing)")
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    try:
+        item = upsert_audio_asset(
+            storage_key=str((payload or {}).get("storage_key") or ""),
+            kind=str((payload or {}).get("kind") or "ambience"),
+            title=str((payload or {}).get("title") or ""),
+            tags=(payload or {}).get("tags") or [],
+            source=str((payload or {}).get("source") or ""),
+            license=str((payload or {}).get("license") or ""),
+            duration_s=(payload or {}).get("duration_s"),
+            loudness_lufs=(payload or {}).get("loudness_lufs"),
+            notes=str((payload or {}).get("notes") or ""),
+            extra=(payload or {}).get("extra") or {},
+        )
+        return {"ok": True, "item": item}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"DB error: {e}")
+
+
+@router.post("/admin/audio_assets/delete")
+async def admin_delete_audio_assets(request: Request):
+    """
+    Delete audio asset metadata by storage_key (admin only).
+    Body: { "storage_key": "ambiences/ocean.mp3" }
+    """
+    _require_admin(request)
+    if not db_enabled():
+        raise HTTPException(status_code=503, detail="DB disabled (DATABASE_URL/psycopg missing)")
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    storage_key = str((payload or {}).get("storage_key") or "")
+    try:
+        deleted = delete_audio_asset(storage_key=storage_key)
+        return {"ok": True, "deleted": bool(deleted)}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"DB error: {e}")
+
+
 @router.post("/admin/storage/upload")
 async def admin_storage_upload(
     request: Request,
@@ -499,6 +585,16 @@ async def admin_storage_upload(
     res = upload_object(key, data, content_type=ct, upsert=True)
     if not res.get("ok"):
         raise HTTPException(status_code=400, detail=res.get("error") or "Upload failed")
+    # Best-effort: auto-create metadata row for easier catalog curation (if DB enabled).
+    try:
+        if db_enabled():
+            storage_key = str(res.get("key") or key or "")
+            kind = "music" if storage_key.startswith("music/") else "ambience"
+            filename = storage_key.split("/")[-1]
+            title = filename.rsplit(".", 1)[0].replace("-", " ").replace("_", " ").strip()
+            _ = upsert_audio_asset(storage_key=storage_key, kind=kind, title=title, tags=[], source="", license="", extra={"uploaded_via": "admin"})
+    except Exception:
+        pass
     return {"ok": True, "key": res.get("key")}
 
 

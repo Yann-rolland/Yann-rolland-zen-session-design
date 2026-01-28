@@ -10,6 +10,9 @@ import {
   adminStorageList,
   adminStorageMove,
   adminStorageUpload,
+  adminListAudioAssets,
+  adminUpsertAudioAsset,
+  type AudioAsset,
   type AdminStorageExpected,
 } from "@/api/hypnoticApi";
 
@@ -40,6 +43,7 @@ export default function AdminAudioLibrary() {
 
   const [expected, setExpected] = React.useState<AdminStorageExpected | null>(null);
   const [items, setItems] = React.useState<ObjRow[]>([]);
+  const [assets, setAssets] = React.useState<AudioAsset[]>([]);
   const [prefix, setPrefix] = React.useState<string>("music/");
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string>("");
@@ -58,6 +62,12 @@ export default function AdminAudioLibrary() {
       ]);
       setExpected(exp);
       setItems((lst.items || []) as any);
+      try {
+        const meta = await adminListAudioAssets(token.trim(), { limit: 1000, offset: 0 });
+        setAssets(meta.items || []);
+      } catch {
+        setAssets([]);
+      }
     } catch (e: any) {
       setError(e?.message || String(e));
     } finally {
@@ -131,6 +141,88 @@ export default function AdminAudioLibrary() {
   const catMusic = expected?.catalog?.music || {};
   const catAmb = expected?.catalog?.ambiences || {};
 
+  const assetsByKey = React.useMemo(() => {
+    const m = new Map<string, AudioAsset>();
+    for (const a of assets || []) {
+      if (a?.storage_key) m.set(String(a.storage_key), a);
+    }
+    return m;
+  }, [assets]);
+
+  const parseTags = (s: string) =>
+    (s || "")
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .slice(0, 30);
+
+  const AssetEditor = (props: { storageKey: string; kind: "music" | "ambience"; defaultTitle: string }) => {
+    const { storageKey, kind, defaultTitle } = props;
+    const existing = assetsByKey.get(storageKey);
+    const [title, setTitle] = React.useState(existing?.title || defaultTitle);
+    const [tagsText, setTagsText] = React.useState((existing?.tags || []).join(", "));
+    const [source, setSource] = React.useState(existing?.source || "");
+    const [license, setLicense] = React.useState(existing?.license || "");
+
+    React.useEffect(() => {
+      const next = assetsByKey.get(storageKey);
+      setTitle(next?.title || defaultTitle);
+      setTagsText((next?.tags || []).join(", "));
+      setSource(next?.source || "");
+      setLicense(next?.license || "");
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [storageKey, assetsByKey]);
+
+    const save = async () => {
+      if (!token.trim()) return;
+      setIsLoading(true);
+      setError("");
+      try {
+        const res = await adminUpsertAudioAsset(token.trim(), {
+          storage_key: storageKey,
+          kind,
+          title: title || "",
+          tags: parseTags(tagsText),
+          source: source || "",
+          license: license || "",
+        });
+        const next = [res.item, ...(assets || []).filter((a) => a.storage_key !== res.item.storage_key)];
+        setAssets(next);
+        toast({ title: "Metadata sauvegardée", description: storageKey });
+      } catch (e: any) {
+        setError(e?.message || String(e));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    return (
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <div className="md:col-span-2">
+          <Label>Titre</Label>
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} className="mt-2" disabled={!hasToken || isLoading} />
+        </div>
+        <div className="md:col-span-2">
+          <Label>Tags (séparés par virgule)</Label>
+          <Input value={tagsText} onChange={(e) => setTagsText(e.target.value)} className="mt-2" disabled={!hasToken || isLoading} />
+        </div>
+        <div>
+          <Label>Source</Label>
+          <Input value={source} onChange={(e) => setSource(e.target.value)} className="mt-2" disabled={!hasToken || isLoading} />
+        </div>
+        <div>
+          <Label>Licence</Label>
+          <Input value={license} onChange={(e) => setLicense(e.target.value)} className="mt-2" disabled={!hasToken || isLoading} />
+        </div>
+        <div className="md:col-span-2 flex justify-end">
+          <Button onClick={save} disabled={!hasToken || isLoading}>
+            Sauver metadata
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -180,6 +272,7 @@ export default function AdminAudioLibrary() {
             <div className="font-medium">Musique</div>
             {Object.entries(expMusic).map(([id, key]) => {
               const ok = Boolean(catMusic[id]);
+              const defaultTitle = id.replace(/^user-/, "").replaceAll("-", " ");
               return (
                 <div key={id} className="rounded-md border border-border p-3 space-y-2">
                   <div className="flex items-center justify-between gap-3">
@@ -206,6 +299,7 @@ export default function AdminAudioLibrary() {
                       </Button>
                     </label>
                   </div>
+                  <AssetEditor storageKey={key} kind="music" defaultTitle={defaultTitle} />
                 </div>
               );
             })}
@@ -215,6 +309,7 @@ export default function AdminAudioLibrary() {
             <div className="font-medium">Ambiances</div>
             {Object.entries(expAmb).map(([id, key]) => {
               const ok = Boolean(catAmb[id] || catAmb[id.replace("-", "")]);
+              const defaultTitle = id.replaceAll("-", " ");
               return (
                 <div key={id} className="rounded-md border border-border p-3 space-y-2">
                   <div className="flex items-center justify-between gap-3">
@@ -241,6 +336,7 @@ export default function AdminAudioLibrary() {
                       </Button>
                     </label>
                   </div>
+                  <AssetEditor storageKey={key} kind="ambience" defaultTitle={defaultTitle} />
                 </div>
               );
             })}

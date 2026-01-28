@@ -513,6 +513,77 @@ export async function adminStorageDelete(adminToken: string, key: string): Promi
   return res.json();
 }
 
+export type AudioAsset = {
+  id: string;
+  storage_key: string;
+  kind: "music" | "ambience" | string;
+  title: string;
+  tags: string[];
+  source: string;
+  license: string;
+  duration_s?: number | null;
+  loudness_lufs?: number | null;
+  notes: string;
+  extra: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+};
+
+export async function adminListAudioAssets(
+  adminToken: string,
+  params?: { kind?: string; q?: string; limit?: number; offset?: number },
+): Promise<{ items: AudioAsset[] }> {
+  const base = getApiBase();
+  const sp = new URLSearchParams();
+  if (params?.kind) sp.set("kind", params.kind);
+  if (params?.q) sp.set("q", params.q);
+  if (params?.limit != null) sp.set("limit", String(params.limit));
+  if (params?.offset != null) sp.set("offset", String(params.offset));
+  const url = joinUrl(base, `/admin/audio_assets?${sp.toString()}`);
+  const res = await fetch(url, { method: "GET", headers: { "x-admin-token": adminToken } });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
+  }
+  return res.json();
+}
+
+export async function adminUpsertAudioAsset(
+  adminToken: string,
+  payload: Partial<AudioAsset> & { storage_key: string },
+): Promise<{ ok: boolean; item: AudioAsset }> {
+  const base = getApiBase();
+  const url = joinUrl(base, `/admin/audio_assets`);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-admin-token": adminToken },
+    body: JSON.stringify(payload || {}),
+  });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
+  }
+  return res.json();
+}
+
+export async function adminDeleteAudioAsset(
+  adminToken: string,
+  storage_key: string,
+): Promise<{ ok: boolean; deleted: boolean }> {
+  const base = getApiBase();
+  const url = joinUrl(base, `/admin/audio_assets/delete`);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-admin-token": adminToken },
+    body: JSON.stringify({ storage_key }),
+  });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
+  }
+  return res.json();
+}
+
 export interface ChatHistoryMessage {
   id: string;
   role: "user" | "model";
