@@ -29,7 +29,7 @@ export default function Home() {
             <Sparkles className="w-8 h-8 text-primary-foreground" />
           </div>
           <h1 className="text-3xl md:text-4xl font-bold mb-3 text-gradient-primary">
-            BN-2
+            MaÏa
           </h1>
           <p className="text-lg text-muted-foreground max-w-md mx-auto">
             Créez des sessions de relaxation et d'hypnose personnalisées avec l'IA

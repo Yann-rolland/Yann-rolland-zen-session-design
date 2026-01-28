@@ -1,4 +1,4 @@
-// BN-2 Type Definitions
+// MaÏa Type Definitions
 
 export interface User {
   id: string;
