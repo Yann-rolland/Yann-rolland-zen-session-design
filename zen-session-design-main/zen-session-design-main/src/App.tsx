@@ -13,6 +13,7 @@ import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import AdminInsights from "./pages/AdminInsights";
 import AdminSettings from "./pages/AdminSettings";
+import Chat from "./pages/Chat";
 
 const queryClient = new QueryClient();
 
@@ -50,6 +51,14 @@ const App = () => (
                 element={
                   <AppLayout>
                     <Settings />
+                  </AppLayout>
+                }
+              />
+              <Route
+                path="/chat"
+                element={
+                  <AppLayout>
+                    <Chat />
                   </AppLayout>
                 }
               />

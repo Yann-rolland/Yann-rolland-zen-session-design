@@ -16,6 +16,9 @@ from db import (
     upsert_client_state,
     upsert_user_state,
     wellbeing_stats,
+    insert_chat_message,
+    list_chat_messages,
+    clear_chat_messages,
 )
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -23,8 +26,14 @@ from llm import DEFAULT_SECTIONS, debug_ollama_once
 from llm_gemini import list_gemini_models
 from llm_router import generate_sections
 from mixdown import MixSettings, mixdown_to_wav
-from models import (GenerationRequest, GenerationResponse, HypnosisText,
-                    WellBeingFeedback)
+from models import (
+    ChatRequest,
+    ChatResponse,
+    GenerationRequest,
+    GenerationResponse,
+    HypnosisText,
+    WellBeingFeedback,
+)
 from music import generate_music_bed
 from prompts import build_prompt
 from tts import synthesize_tts_cached
@@ -32,6 +41,7 @@ from urllib.parse import urlparse
 from supabase_storage import build_default_catalog, storage_enabled
 from supabase_auth import get_current_user
 from admin_app_config import load_admin_app_config, rollback_admin_app_config, save_admin_app_config, reset_admin_app_config
+from llm_gemini import chat_gemini
 
 router = APIRouter()
 
@@ -266,6 +276,91 @@ def cloud_audio_catalog():
     if not storage_enabled():
         return {"enabled": False, "music": {}, "ambiences": {}}
     return build_default_catalog()
+
+
+@router.get("/chat/history")
+def chat_history(request: Request, limit: int = 50):
+    """
+    Returns authenticated user's chat history (latest N, oldest->newest).
+    """
+    u = get_current_user(request)
+    if not db_enabled():
+        raise HTTPException(status_code=503, detail="DB disabled (DATABASE_URL/psycopg missing)")
+    try:
+        items = list_chat_messages(user_id=u.id, limit=limit)
+        return {"messages": items}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"DB error: {e}")
+
+
+@router.delete("/chat/history")
+def chat_clear_history(request: Request):
+    """
+    Clears authenticated user's chat history.
+    """
+    u = get_current_user(request)
+    if not db_enabled():
+        raise HTTPException(status_code=503, detail="DB disabled (DATABASE_URL/psycopg missing)")
+    try:
+        deleted = clear_chat_messages(user_id=u.id)
+        return {"ok": True, "deleted": deleted}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"DB error: {e}")
+
+
+@router.post("/chat")
+async def chat(payload: ChatRequest, request: Request):
+    """
+    Chat endpoint backed by Gemini (server-side API key).
+    Requires Supabase auth (Authorization bearer token).
+    Stores messages per-user in Postgres.
+    """
+    u = get_current_user(request)
+
+    # Build message list: small context from DB + current user message
+    if not db_enabled():
+        raise HTTPException(status_code=503, detail="DB disabled (DATABASE_URL/psycopg missing)")
+
+    try:
+        history = list_chat_messages(user_id=u.id, limit=20)
+    except Exception:
+        history = []
+
+    msgs: list[dict] = []
+    for m in history:
+        role = str(m.get("role") or "")
+        if role not in ("user", "model"):
+            continue
+        msgs.append({"role": role, "content": str(m.get("content") or "")})
+
+    user_text = str(payload.message or "").strip()
+    if not user_text:
+        raise HTTPException(status_code=400, detail="Empty message")
+    msgs.append({"role": "user", "content": user_text})
+
+    # Optional admin steering (reuse forced_generation_text as "system" prefix)
+    try:
+        cfg = load_admin_app_config()
+        forced = (cfg.forced_generation_text or "").strip()
+        if forced:
+            msgs = [{"role": "user", "content": f"INSTRUCTION ADMIN (prioritaire):\n{forced}"}] + msgs
+    except Exception:
+        pass
+
+    try:
+        reply = await chat_gemini(msgs, model=str(payload.model or "gemini-pro-latest"))
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Chat error: {_redact_secrets(str(e))}")
+
+    # Persist both user and model messages
+    try:
+        insert_chat_message(user_id=u.id, role="user", content=user_text)
+        insert_chat_message(user_id=u.id, role="model", content=reply)
+    except Exception:
+        # If DB write fails, still return reply
+        pass
+
+    return ChatResponse(reply=reply, stored=True)
 
 
 @router.get("/admin/wellbeing_events")

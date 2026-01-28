@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Shield,
+  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -26,6 +27,7 @@ interface SidebarProps {
 
 const navItems = [
   { to: "/", icon: Home, label: "Accueil" },
+  { to: "/chat", icon: MessageCircle, label: "Chat" },
   { to: "/history", icon: Clock, label: "Historique" },
   { to: "/settings", icon: Settings, label: "Réglages" },
 ];

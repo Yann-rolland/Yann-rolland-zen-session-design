@@ -1,10 +1,11 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
-import { Clock, Home, Settings, Shield, User } from "lucide-react";
+import { Clock, Home, Settings, Shield, User, MessageCircle } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 
 const navItems = [
   { to: "/", icon: Home, label: "Accueil" },
+  { to: "/chat", icon: MessageCircle, label: "Chat" },
   { to: "/history", icon: Clock, label: "Historique" },
   { to: "/settings", icon: Settings, label: "Réglages" },
 ];

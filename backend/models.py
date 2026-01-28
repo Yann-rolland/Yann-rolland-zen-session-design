@@ -138,3 +138,20 @@ class WellBeingFeedback(BaseModel):
     note: str = Field(default="", max_length=4000)
     session_id: str = Field(default="", max_length=128)
 
+
+class ChatMessage(BaseModel):
+    role: str = Field(default="user", max_length=16)
+    content: str = Field(default="", max_length=8000)
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=4000)
+    # Optional: include a short recent history (client can omit; server can pull from DB).
+    history: Optional[list[ChatMessage]] = None
+    model: str = Field(default="gemini-pro-latest", max_length=64)
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    stored: bool = True
+

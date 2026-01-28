@@ -416,6 +416,54 @@ export async function adminSaveAppConfig(
   return res.json();
 }
 
+export interface ChatHistoryMessage {
+  id: string;
+  role: "user" | "model";
+  content: string;
+  created_at: string;
+}
+
+export async function chatHistory(limit = 50): Promise<{ messages: ChatHistoryMessage[] }> {
+  const base = getApiBase();
+  const url = joinUrl(base, `/chat/history?limit=${encodeURIComponent(String(limit))}`);
+  const headers = await authHeader();
+  const res = await fetch(url, { method: "GET", headers, cache: "no-store" });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
+  }
+  return res.json();
+}
+
+export async function chatClearHistory(): Promise<{ ok: boolean; deleted: number }> {
+  const base = getApiBase();
+  const url = joinUrl(base, `/chat/history`);
+  const headers = await authHeader();
+  const res = await fetch(url, { method: "DELETE", headers });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
+  }
+  return res.json();
+}
+
+export async function chatSend(message: string, model?: string): Promise<{ reply: string }> {
+  const base = getApiBase();
+  const url = joinUrl(base, `/chat`);
+  const headers = await authHeader();
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify({ message, model: model || "gemini-pro-latest" }),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
+  }
+  return res.json();
+}
+
 export async function generateSession(payload: GenerationRequest): Promise<GenerationResponse> {
   const base = getApiBase();
   const url = joinUrl(base, "/generate");

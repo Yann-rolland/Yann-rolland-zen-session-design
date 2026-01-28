@@ -100,6 +100,19 @@ def init_db() -> None:
                 );
                 """
             )
+            # Per-user chat history (simple, append-only)
+            cur.execute(
+                """
+                create table if not exists chat_messages (
+                  id bigserial primary key,
+                  user_id uuid not null,
+                  role text not null,
+                  content text not null,
+                  created_at timestamptz not null default now()
+                );
+                """
+            )
+            cur.execute("create index if not exists idx_chat_user_created on chat_messages(user_id, created_at desc);")
             # Backward-compatible migrations (in case the table existed before adding user columns)
             cur.execute("alter table wellbeing_events add column if not exists user_id uuid;")
             cur.execute("alter table wellbeing_events add column if not exists user_email text;")
@@ -124,6 +137,54 @@ def upsert_client_state(device_id: str, state: Dict[str, Any]) -> None:
                 """,
                 (device_id, payload),
             )
+
+
+def insert_chat_message(*, user_id: str, role: str, content: str) -> None:
+    if not db_enabled():
+        raise RuntimeError("DB disabled")
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "insert into chat_messages(user_id, role, content) values (%s, %s, %s);",
+                (user_id, role, content),
+            )
+
+
+def list_chat_messages(*, user_id: str, limit: int = 50) -> list[Dict[str, Any]]:
+    if not db_enabled():
+        raise RuntimeError("DB disabled")
+    limit = max(1, min(int(limit or 50), 200))
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "select id, role, content, created_at from chat_messages where user_id=%s order by created_at desc limit %s;",
+                (user_id, limit),
+            )
+            rows = cur.fetchall() or []
+    # return oldest -> newest for UI
+    out = []
+    for (mid, role, content, created_at) in reversed(rows):
+        out.append(
+            {
+                "id": str(mid),
+                "role": str(role),
+                "content": str(content),
+                "created_at": created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at),
+            }
+        )
+    return out
+
+
+def clear_chat_messages(*, user_id: str) -> int:
+    if not db_enabled():
+        raise RuntimeError("DB disabled")
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("delete from chat_messages where user_id=%s;", (user_id,))
+            try:
+                return int(cur.rowcount or 0)
+            except Exception:
+                return 0
 
 
 def upsert_user_state(user_id: str, state: Dict[str, Any]) -> None:

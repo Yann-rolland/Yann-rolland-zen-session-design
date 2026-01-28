@@ -32,6 +32,83 @@ class GeminiConfigError(RuntimeError):
     pass
 
 
+async def chat_gemini(
+    messages: list[dict],
+    *,
+    model: str = GEMINI_DEFAULT_MODEL,
+    temperature: float = 0.6,
+    max_output_tokens: int = 800,
+) -> str:
+    """
+    Simple chat completion via Gemini generateContent.
+    messages format:
+      [{"role":"user"|"model","content":"..."}...]
+    Returns assistant text.
+    """
+    api_key = os.environ.get(GEMINI_API_KEY_ENV)
+    if not api_key:
+        raise GeminiConfigError("GEMINI_API_KEY manquant (variable d'environnement).")
+
+    if model.startswith("models/"):
+        model = model[len("models/") :]
+
+    url = f"{GEMINI_BASE}/models/{model}:generateContent"
+    params = {"key": api_key}
+
+    contents = []
+    for m in (messages or []):
+        role = str(m.get("role") or "user")
+        if role not in ("user", "model"):
+            role = "user"
+        text = str(m.get("content") or "").strip()
+        if not text:
+            continue
+        contents.append({"role": role, "parts": [{"text": text}]})
+
+    if not contents:
+        return ""
+
+    payload = {
+        "contents": contents,
+        "generationConfig": {
+            "temperature": float(temperature),
+            "topP": 0.9,
+            "maxOutputTokens": int(max(64, min(int(max_output_tokens), 2048))),
+        },
+    }
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        try:
+            resp = await client.post(url, params=params, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code if exc.response is not None else "?"
+            details = ""
+            try:
+                body = exc.response.json()
+                err = body.get("error") if isinstance(body, dict) else None
+                if isinstance(err, dict):
+                    details = f"{err.get('status')}: {err.get('message')}".strip(": ").strip()
+                else:
+                    details = json.dumps(body, ensure_ascii=False)[:800]
+            except Exception:
+                try:
+                    details = (exc.response.text or "")[:800]
+                except Exception:
+                    details = ""
+            raise RuntimeError(_redact_secrets(f"Gemini HTTP {status}. {details}".strip()))
+        except Exception as e:
+            raise RuntimeError(_redact_secrets(str(e)))
+
+    candidates = data.get("candidates", [])
+    text = ""
+    if candidates:
+        parts = candidates[0].get("content", {}).get("parts", [])
+        text = "".join(p.get("text", "") for p in parts)
+    return text.strip()
+
+
 async def generate_text_sections_gemini(prompt: str, model: str = GEMINI_DEFAULT_MODEL) -> Dict[str, str]:
     """
     Appelle Gemini via l'API Google Generative Language (v1beta).
