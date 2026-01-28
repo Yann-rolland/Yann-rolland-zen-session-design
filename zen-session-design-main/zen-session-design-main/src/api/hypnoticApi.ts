@@ -382,6 +382,40 @@ export async function adminWellbeingStats(adminToken: string, days = 30): Promis
   return res.json();
 }
 
+export interface AdminAppConfig {
+  forced_generation_text: string;
+  updated_at?: string;
+}
+
+export async function adminGetAppConfig(adminToken: string): Promise<{ config: AdminAppConfig }> {
+  const base = getApiBase();
+  const url = joinUrl(base, `/admin/app_config`);
+  const res = await fetch(url, { method: "GET", headers: { "x-admin-token": adminToken } });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
+  }
+  return res.json();
+}
+
+export async function adminSaveAppConfig(
+  adminToken: string,
+  payload: { forced_generation_text?: string; action?: "save" | "rollback" | "reset" },
+): Promise<{ ok: boolean; action: string; config: AdminAppConfig }> {
+  const base = getApiBase();
+  const url = joinUrl(base, `/admin/app_config`);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-admin-token": adminToken },
+    body: JSON.stringify(payload || {}),
+  });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
+  }
+  return res.json();
+}
+
 export async function generateSession(payload: GenerationRequest): Promise<GenerationResponse> {
   const base = getApiBase();
   const url = joinUrl(base, "/generate");

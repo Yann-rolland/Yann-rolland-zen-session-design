@@ -31,6 +31,7 @@ from tts import synthesize_tts_cached
 from urllib.parse import urlparse
 from supabase_storage import build_default_catalog, storage_enabled
 from supabase_auth import get_current_user
+from admin_app_config import load_admin_app_config, rollback_admin_app_config, save_admin_app_config, reset_admin_app_config
 
 router = APIRouter()
 
@@ -295,6 +296,43 @@ def admin_wellbeing_stats(request: Request, days: int = 30):
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"DB error: {e}")
 
+
+@router.get("/admin/app_config")
+def admin_get_app_config(request: Request):
+    """
+    Admin-only app configuration (global):
+    - forced_generation_text: prepended to every LLM prompt to steer sessions.
+    Stored in assets/state/admin_app_config.json with rollback protection.
+    """
+    _require_admin(request)
+    cfg = load_admin_app_config()
+    return {"config": cfg.to_dict()}
+
+
+@router.post("/admin/app_config")
+async def admin_save_app_config(request: Request):
+    """
+    Save admin app config with rollback protection.
+    Body:
+      { "forced_generation_text": "...", "action": "save"|"rollback"|"reset" }
+    """
+    _require_admin(request)
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    action = str((payload or {}).get("action") or "save").lower().strip()
+    if action == "rollback":
+        cfg = rollback_admin_app_config()
+        return {"ok": True, "action": "rollback", "config": cfg.to_dict()}
+    if action == "reset":
+        cfg = reset_admin_app_config()
+        return {"ok": True, "action": "reset", "config": cfg.to_dict()}
+
+    forced = str((payload or {}).get("forced_generation_text") or "")
+    cfg = save_admin_app_config(forced)
+    return {"ok": True, "action": "save", "config": cfg.to_dict()}
 @router.post("/feedback/wellbeing")
 async def feedback_wellbeing(payload: WellBeingFeedback, request: Request):
     """
@@ -678,6 +716,14 @@ async def generate(request: GenerationRequest, http_request: Request):
 
     try:
         prompt = build_prompt(request)
+        # Admin override: force an additional instruction to steer the LLM.
+        try:
+            cfg = load_admin_app_config()
+            forced = (cfg.forced_generation_text or "").strip()
+            if forced:
+                prompt = f"INSTRUCTION ADMIN (prioritaire, à respecter strictement):\n{forced}\n\n---\n\n{prompt}"
+        except Exception:
+            pass
         # Safe: si LLM lent/HS, on ne casse pas /generate (on garde un texte fallback),
         # mais on expose l'état pour que le frontend puisse l'afficher.
         # llm_provider peut être un Enum (LLMProvider.gemini) => on prend .value si dispo pour un affichage clair.

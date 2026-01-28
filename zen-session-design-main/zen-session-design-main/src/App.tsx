@@ -12,6 +12,7 @@ import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import AdminInsights from "./pages/AdminInsights";
+import AdminSettings from "./pages/AdminSettings";
 
 const queryClient = new QueryClient();
 
@@ -58,6 +59,14 @@ const App = () => (
                 element={
                   <AppLayout>
                     <AdminInsights />
+                  </AppLayout>
+                }
+              />
+              <Route
+                path="/admin/settings"
+                element={
+                  <AppLayout>
+                    <AdminSettings />
                   </AppLayout>
                 }
               />
