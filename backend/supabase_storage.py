@@ -96,6 +96,7 @@ def build_default_catalog() -> Dict[str, Any]:
     }
 
     # Ambiences: map existing enum values to optional mp3 in storage
+    # NOTE: we also expose French aliases (pluie/vent/forêt/feu) for compatibility with earlier UI labels.
     ambience_paths = {
         "rain": "ambiences/rain.mp3",
         "forest": "ambiences/forest.mp3",
@@ -114,8 +115,20 @@ def build_default_catalog() -> Dict[str, Any]:
     ambiences: Dict[str, str] = {}
     for k, p in ambience_paths.items():
         u = sign_url(p, expires_in=expires)
-        if u:
-            ambiences[k] = u
+        if not u:
+            continue
+        # Canonical keys (match frontend enums)
+        ambiences[k] = u
+        # French aliases (non-breaking)
+        if k == "rain":
+            ambiences["pluie"] = u
+        elif k == "wind":
+            ambiences["vent"] = u
+        elif k == "forest":
+            ambiences["foret"] = u
+            ambiences["forêt"] = u
+        elif k == "fire":
+            ambiences["feu"] = u
 
     data = {
         "enabled": storage_enabled(),
