@@ -128,13 +128,29 @@ export function SessionPlayer({ className }: SessionPlayerProps) {
         mixRef.current.loop = Boolean(currentSession.config.loop);
         await mixRef.current.play();
       } else {
-        if (!voiceRef.current || !musicRef.current || !binauralRef.current) throw new Error("Audio manquant.");
+        if (!voiceRef.current) throw new Error("Audio (voix) manquant.");
         voiceRef.current.loop = false;
-        musicRef.current.loop = Boolean(currentSession.config.loop);
-        binauralRef.current.loop = Boolean(currentSession.config.loop);
-        // Démarre d'abord les loops, puis la voix (évite un “trou” au début)
-        await musicRef.current.play();
-        await binauralRef.current.play();
+        // Optional tracks: don't block voice playback if they fail.
+        const wantMusic = Boolean(currentSession.config.playMusic) && (playerState.volumes.music ?? 0) > 0;
+        const wantBinaural = Boolean(currentSession.config.playBinaural) && (playerState.volumes.binaural ?? 0) > 0;
+
+        if (wantMusic && musicRef.current) {
+          try {
+            musicRef.current.loop = Boolean(currentSession.config.loop);
+            await musicRef.current.play();
+          } catch {
+            // ignore: keep going for voice
+          }
+        }
+        if (wantBinaural && binauralRef.current) {
+          try {
+            binauralRef.current.loop = Boolean(currentSession.config.loop);
+            await binauralRef.current.play();
+          } catch {
+            // ignore: keep going for voice
+          }
+        }
+        // Voice last (most important)
         await voiceRef.current.play();
       }
     } catch (e: any) {

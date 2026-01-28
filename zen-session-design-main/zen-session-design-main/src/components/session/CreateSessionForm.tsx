@@ -65,7 +65,8 @@ export function CreateSessionForm({ onSessionCreated, className }: CreateSession
         style: opts.style,
         llm_provider: mapLLMProvider(opts.config.llmProvider),
         tts_provider: mapTTSProvider(opts.config.ttsProvider),
-        mixdown: true,
+        // In cloud, playing separate tracks is more robust (voice still plays if music/binaural fail).
+        mixdown: false,
         voice_volume: Math.max(0, Math.min(2, (opts.config.voiceVolume ?? 80) / 100)),
         music_volume: opts.config.playMusic ? Math.max(0, Math.min(2, (opts.config.musicVolume ?? 40) / 100)) : 0,
         binaural_volume:
