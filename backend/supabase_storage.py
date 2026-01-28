@@ -63,6 +63,12 @@ def sign_url(path: str, *, expires_in: int = 3600) -> Optional[str]:
 
     # Supabase renvoie souvent une URL relative (commençant par /storage/...)
     signed = str(signed)
+    # Some Supabase responses return paths without the "/storage/v1" prefix (e.g. "/object/sign/...").
+    # Normalize to a working absolute URL.
+    if signed.startswith("/object/"):
+        signed = "/storage/v1" + signed
+    elif signed.startswith("object/"):
+        signed = "/storage/v1/" + signed
     if signed.startswith("http://") or signed.startswith("https://"):
         return signed
     if signed.startswith("/"):
