@@ -206,6 +206,9 @@ def debug_env():
     supabase_service_key = (os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
     supabase_bucket = (os.environ.get("SUPABASE_STORAGE_BUCKET") or "").strip()
 
+    gemini_key = os.environ.get("GEMINI_API_KEY") or ""
+    gemini_key = gemini_key.strip()
+
     return {
         "RENDER_GIT_COMMIT": os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("RENDER_COMMIT") or None,
         "python_executable": getattr(sys, "executable", None),
@@ -224,7 +227,8 @@ def debug_env():
         "SUPABASE_URL_set": bool(supabase_url),
         "SUPABASE_SERVICE_ROLE_KEY_set": bool(supabase_service_key),
         "SUPABASE_STORAGE_BUCKET_set": bool(supabase_bucket),
-        "GEMINI_API_KEY_set": bool(os.environ.get("GEMINI_API_KEY")),
+        "GEMINI_API_KEY_set": bool(gemini_key),
+        "GEMINI_API_KEY_len": len(gemini_key),
         "FREESOUND_API_KEY_set": bool(os.environ.get("FREESOUND_API_KEY")),
         "OLLAMA_MODEL": os.environ.get("OLLAMA_MODEL", None),
         "OLLAMA_NUM_GPU": os.environ.get("OLLAMA_NUM_GPU", None),
