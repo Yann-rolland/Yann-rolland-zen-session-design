@@ -289,7 +289,14 @@ export interface CloudAudioCatalog {
 export async function getCloudAudioCatalog(): Promise<CloudAudioCatalog> {
   const base = getApiBase();
   const url = joinUrl(base, "/cloud-audio/catalog");
-  const res = await fetch(url, { method: "GET" });
+  let res: Response;
+  try {
+    // Render free instances can be sleeping; avoid cache surprises and provide a clearer error on network failures.
+    res = await fetch(url, { method: "GET", cache: "no-store" });
+  } catch (e: any) {
+    const msg = e?.message || String(e);
+    throw new Error(`Fetch failed (url=${url}). ${msg}`);
+  }
   if (!res.ok) {
     const msg = await res.text().catch(() => "");
     throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);

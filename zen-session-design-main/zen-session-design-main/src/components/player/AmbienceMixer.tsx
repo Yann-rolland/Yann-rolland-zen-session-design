@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/collapsible";
 import { MUSIC_TRACKS, musicFileForId } from "@/audio/musicLibrary";
 import { makeNoiseBuffer, rampGain } from "@/audio/noiseGenerators";
-import { getCloudAudioCatalog, libraryUrl } from "@/api/hypnoticApi";
+import { getApiBase, getCloudAudioCatalog, libraryUrl } from "@/api/hypnoticApi";
 import { AmbianceType, BinauralType, MusicTrackId, SessionConfig } from "@/types";
 import { ChevronDown, ChevronUp, Music2, Cloud, Waves } from "lucide-react";
 
@@ -526,6 +526,8 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
             : cloudCatalogStatus === "error"
               ? "erreur"
               : "—"}
+        {" · "}
+        API: <code>{getApiBase()}</code>
         {cloudCatalogStatus === "error" ? (
           <>
             {" · "}
@@ -534,7 +536,7 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
               Test:{" "}
               <a
                 className="underline"
-                href={`${(import.meta.env.VITE_API_BASE as string | undefined) || ""}/cloud-audio/catalog`}
+                href={`${getApiBase()}/cloud-audio/catalog`}
                 target="_blank"
                 rel="noreferrer"
               >
