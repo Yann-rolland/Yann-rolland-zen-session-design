@@ -139,7 +139,12 @@ def debug_env():
             psycopg_err = traceback.format_exc(limit=2)
         except Exception:
             psycopg_err = "import failed"
-    db_url = os.environ.get("DATABASE_URL", "")
+    # Use the same parsing as the DB connector (strips unsupported params like pgbouncer=...)
+    try:
+        from db import get_database_url
+        db_url = get_database_url() or ""
+    except Exception:
+        db_url = os.environ.get("DATABASE_URL", "") or ""
     host = None
     try:
         if db_url:
@@ -193,7 +198,7 @@ def debug_env():
     return {
         "RENDER_GIT_COMMIT": os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("RENDER_COMMIT") or None,
         "python_executable": getattr(sys, "executable", None),
-        "DATABASE_URL_set": bool(db_url),
+        "DATABASE_URL_set": bool((os.environ.get("DATABASE_URL", "") or "").strip()),
         "DATABASE_HOST": host,
         "DATABASE_DNS_ok": dns_ok,
         "DATABASE_DNS_error": dns_err,
