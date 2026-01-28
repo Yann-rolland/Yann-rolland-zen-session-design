@@ -122,11 +122,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (inviteOnly && allowedEmails.length > 0 && !allowedEmails.includes(normalizedEmail)) {
         throw new Error("Accès sur invitation: cet email n'est pas autorisé.");
       }
+      const emailRedirectTo = `${window.location.origin}/login`;
       // Sends an email OTP if enabled in Supabase; otherwise sends a magic link.
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: {
           shouldCreateUser: false,
+          emailRedirectTo,
         },
       });
       if (error) throw error;
@@ -182,11 +184,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("Accès sur invitation: cet email n'est pas autorisé.");
       }
 
+      // Ensure email confirmation link redirects to the current app domain (Vercel/prod/preview),
+      // otherwise Supabase may use its "Site URL" (often misconfigured) leading to "site inaccessible".
+      const emailRedirectTo = `${window.location.origin}/login`;
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
           data: { name: name?.trim() || undefined },
+          emailRedirectTo,
         },
       });
       if (error) throw error;
