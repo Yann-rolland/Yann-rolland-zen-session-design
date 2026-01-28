@@ -121,6 +121,30 @@ def init_db() -> None:
             cur.execute("create index if not exists idx_wellbeing_device_id on wellbeing_events(device_id);")
             cur.execute("create index if not exists idx_wellbeing_received_at on wellbeing_events(received_at);")
 
+            # Global audio asset metadata (admin-managed, links to Supabase Storage keys)
+            cur.execute(
+                """
+                create table if not exists audio_assets (
+                  id bigserial primary key,
+                  storage_key text unique not null,
+                  kind text not null default 'ambience',
+                  title text not null default '',
+                  tags text[] not null default '{}',
+                  source text not null default '',
+                  license text not null default '',
+                  duration_s int,
+                  loudness_lufs real,
+                  notes text not null default '',
+                  extra jsonb not null default '{}'::jsonb,
+                  created_at timestamptz not null default now(),
+                  updated_at timestamptz not null default now()
+                );
+                """
+            )
+            cur.execute("create index if not exists idx_audio_assets_kind on audio_assets(kind);")
+            cur.execute("create index if not exists idx_audio_assets_updated_at on audio_assets(updated_at desc);")
+            cur.execute("create index if not exists idx_audio_assets_tags_gin on audio_assets using gin(tags);")
+
 
 def upsert_client_state(device_id: str, state: Dict[str, Any]) -> None:
     if not db_enabled():
@@ -413,4 +437,173 @@ def wellbeing_stats(*, days: int = 30) -> dict:
         "series": series,
     }
 
+
+def upsert_audio_asset(
+    *,
+    storage_key: str,
+    kind: str = "ambience",
+    title: str = "",
+    tags: Optional[list[str]] = None,
+    source: str = "",
+    license: str = "",
+    duration_s: Optional[int] = None,
+    loudness_lufs: Optional[float] = None,
+    notes: str = "",
+    extra: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Upsert audio asset metadata by storage_key (unique).
+    """
+    if not db_enabled():
+        raise RuntimeError("DB disabled")
+    k = (storage_key or "").strip().lstrip("/").replace("\\", "/")
+    if not k:
+        raise ValueError("storage_key required")
+    kind = (kind or "ambience").strip()[:32]
+    title = (title or "").strip()[:256]
+    source = (source or "").strip()[:256]
+    license = (license or "").strip()[:128]
+    notes = (notes or "").strip()[:2000]
+    tags_list = []
+    for t in (tags or []):
+        tt = (str(t or "").strip()[:32]).lower()
+        if tt and tt not in tags_list:
+            tags_list.append(tt)
+    extra_json = json.dumps(extra or {}, ensure_ascii=False)
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                insert into audio_assets(
+                  storage_key, kind, title, tags, source, license, duration_s, loudness_lufs, notes, extra, updated_at
+                )
+                values (%s, %s, %s, %s::text[], %s, %s, %s, %s, %s, %s::jsonb, now())
+                on conflict (storage_key)
+                do update set
+                  kind = excluded.kind,
+                  title = excluded.title,
+                  tags = excluded.tags,
+                  source = excluded.source,
+                  license = excluded.license,
+                  duration_s = excluded.duration_s,
+                  loudness_lufs = excluded.loudness_lufs,
+                  notes = excluded.notes,
+                  extra = excluded.extra,
+                  updated_at = now()
+                returning id, storage_key, kind, title, tags, source, license, duration_s, loudness_lufs, notes, extra, created_at, updated_at;
+                """,
+                (
+                    k,
+                    kind,
+                    title,
+                    tags_list,
+                    source,
+                    license,
+                    int(duration_s) if duration_s is not None else None,
+                    float(loudness_lufs) if loudness_lufs is not None else None,
+                    notes,
+                    extra_json,
+                ),
+            )
+            row = cur.fetchone()
+
+    return _audio_asset_row_to_dict(row)
+
+
+def _audio_asset_row_to_dict(row: Any) -> Dict[str, Any]:
+    if not row:
+        return {}
+    (
+        aid,
+        storage_key,
+        kind,
+        title,
+        tags,
+        source,
+        license,
+        duration_s,
+        loudness_lufs,
+        notes,
+        extra,
+        created_at,
+        updated_at,
+    ) = row
+    if isinstance(extra, str):
+        try:
+            extra_val = json.loads(extra)
+        except Exception:
+            extra_val = {}
+    else:
+        extra_val = extra if isinstance(extra, dict) else json.loads(json.dumps(extra))
+    return {
+        "id": str(aid),
+        "storage_key": str(storage_key),
+        "kind": str(kind),
+        "title": str(title),
+        "tags": list(tags or []),
+        "source": str(source),
+        "license": str(license),
+        "duration_s": (int(duration_s) if duration_s is not None else None),
+        "loudness_lufs": (float(loudness_lufs) if loudness_lufs is not None else None),
+        "notes": str(notes),
+        "extra": extra_val,
+        "created_at": (created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at)),
+        "updated_at": (updated_at.isoformat() if hasattr(updated_at, "isoformat") else str(updated_at)),
+    }
+
+
+def list_audio_assets(
+    *,
+    kind: Optional[str] = None,
+    q: Optional[str] = None,
+    tag: Optional[str] = None,
+    limit: int = 200,
+    offset: int = 0,
+) -> list[Dict[str, Any]]:
+    if not db_enabled():
+        raise RuntimeError("DB disabled")
+    limit = max(1, min(int(limit or 200), 1000))
+    offset = max(0, int(offset or 0))
+    where = []
+    params: list[Any] = []
+    if kind:
+        where.append("kind = %s")
+        params.append(str(kind))
+    if q:
+        where.append("(storage_key ilike %s or title ilike %s)")
+        qq = f"%{str(q).strip()}%"
+        params.extend([qq, qq])
+    if tag:
+        # Match a single canonical tag (case-insensitive best effort by normalizing to lower)
+        where.append("(%s = any(tags))")
+        params.append(str(tag).strip().lower())
+    where_sql = f"where {' and '.join(where)}" if where else ""
+    sql = f"""
+        select id, storage_key, kind, title, tags, source, license, duration_s, loudness_lufs, notes, extra, created_at, updated_at
+        from audio_assets
+        {where_sql}
+        order by updated_at desc
+        limit {limit} offset {offset};
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, tuple(params))
+            rows = cur.fetchall() or []
+    return [_audio_asset_row_to_dict(r) for r in rows]
+
+
+def delete_audio_asset(*, storage_key: str) -> bool:
+    if not db_enabled():
+        raise RuntimeError("DB disabled")
+    k = (storage_key or "").strip().lstrip("/").replace("\\", "/")
+    if not k:
+        raise ValueError("storage_key required")
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("delete from audio_assets where storage_key=%s;", (k,))
+            try:
+                return int(cur.rowcount or 0) > 0
+            except Exception:
+                return False
 

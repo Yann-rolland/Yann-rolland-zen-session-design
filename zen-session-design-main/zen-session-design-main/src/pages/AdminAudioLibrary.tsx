@@ -45,13 +45,16 @@ export default function AdminAudioLibrary() {
   const [items, setItems] = React.useState<ObjRow[]>([]);
   const [assets, setAssets] = React.useState<AudioAsset[]>([]);
   const [prefix, setPrefix] = React.useState<string>("music/");
+  const [metaKind, setMetaKind] = React.useState<string>("");
+  const [metaQ, setMetaQ] = React.useState<string>("");
+  const [metaTag, setMetaTag] = React.useState<string>("");
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string>("");
 
   const [moveSource, setMoveSource] = React.useState<string>("");
   const [moveDest, setMoveDest] = React.useState<string>("");
 
-  const loadAll = async () => {
+  const loadStorage = async () => {
     if (!token.trim()) return;
     setIsLoading(true);
     setError("");
@@ -62,12 +65,6 @@ export default function AdminAudioLibrary() {
       ]);
       setExpected(exp);
       setItems((lst.items || []) as any);
-      try {
-        const meta = await adminListAudioAssets(token.trim(), { limit: 1000, offset: 0 });
-        setAssets(meta.items || []);
-      } catch {
-        setAssets([]);
-      }
     } catch (e: any) {
       setError(e?.message || String(e));
     } finally {
@@ -75,9 +72,34 @@ export default function AdminAudioLibrary() {
     }
   };
 
+  const loadMeta = async () => {
+    if (!token.trim()) return;
+    setIsLoading(true);
+    setError("");
+    try {
+      const meta = await adminListAudioAssets(token.trim(), {
+        kind: metaKind || undefined,
+        q: metaQ || undefined,
+        tag: metaTag ? canonicalizeTag(metaTag) : undefined,
+        limit: 300,
+        offset: 0,
+      });
+      setAssets(meta.items || []);
+    } catch (e: any) {
+      setError(e?.message || String(e));
+      setAssets([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadAll = async () => {
+    await Promise.all([loadStorage(), loadMeta()]);
+  };
+
   React.useEffect(() => {
     if (!hasToken) return;
-    loadAll();
+    loadStorage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasToken, prefix]);
 
@@ -149,12 +171,101 @@ export default function AdminAudioLibrary() {
     return m;
   }, [assets]);
 
-  const parseTags = (s: string) =>
-    (s || "")
+  const TAG_FR_TO_EN: Record<string, string> = {
+    pluie: "rain",
+    orage: "storm",
+    tempete: "storm",
+    tempête: "storm",
+    vent: "wind",
+    ocean: "ocean",
+    océan: "ocean",
+    foret: "forest",
+    forêt: "forest",
+    feu: "fire",
+    cheminée: "fireplace",
+    cheminee: "fireplace",
+    mer: "ocean",
+    vague: "waves",
+    vagues: "waves",
+    bruit: "noise",
+    bruitrose: "pink-noise",
+    "bruit-rose": "pink-noise",
+    bruinrose: "pink-noise",
+    bruitblanc: "white-noise",
+    "bruit-blanc": "white-noise",
+    bruitbrun: "brown-noise",
+    "bruit-brun": "brown-noise",
+    detente: "relax",
+    détente: "relax",
+    relaxation: "relax",
+    calme: "calm",
+    sommeil: "sleep",
+    focus: "focus",
+    concentration: "focus",
+    meditation: "meditation",
+    méditation: "meditation",
+    zen: "zen",
+  };
+
+  const TAG_EN_TO_FR: Record<string, string> = {
+    rain: "Pluie",
+    wind: "Vent",
+    ocean: "Océan",
+    forest: "Forêt",
+    fire: "Feu",
+    fireplace: "Cheminée",
+    waves: "Vagues",
+    noise: "Bruit",
+    "pink-noise": "Bruit rose",
+    "white-noise": "Bruit blanc",
+    "brown-noise": "Bruit brun",
+    relax: "Détente",
+    calm: "Calme",
+    sleep: "Sommeil",
+    focus: "Concentration",
+    meditation: "Méditation",
+    zen: "Zen",
+    storm: "Orage",
+  };
+
+  function stripAccents(s: string): string {
+    try {
+      return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    } catch {
+      return s;
+    }
+  }
+
+  function canonicalizeTag(raw: string): string {
+    const base = stripAccents(String(raw || "").trim().toLowerCase());
+    const cleaned = base
+      .replace(/[_\s]+/g, "-")
+      .replace(/[^a-z0-9-]/g, "")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+    if (!cleaned) return "";
+    return TAG_FR_TO_EN[cleaned] || cleaned;
+  }
+
+  function prettyTag(en: string): string {
+    const k = String(en || "").trim();
+    const fr = TAG_EN_TO_FR[k];
+    return fr ? `${fr} (${k})` : k;
+  }
+
+  const parseTags = (s: string) => {
+    const raw = (s || "")
       .split(",")
       .map((x) => x.trim())
       .filter(Boolean)
-      .slice(0, 30);
+      .slice(0, 60);
+    const out: string[] = [];
+    for (const t of raw) {
+      const canon = canonicalizeTag(t);
+      if (canon && !out.includes(canon)) out.push(canon);
+    }
+    return out.slice(0, 30);
+  };
 
   const UploadControl = (props: { disabled: boolean; onFile: (file: File) => void }) => {
     const { disabled, onFile } = props;
@@ -209,11 +320,12 @@ export default function AdminAudioLibrary() {
       setIsLoading(true);
       setError("");
       try {
+        const canonicalTags = parseTags(tagsText);
         const res = await adminUpsertAudioAsset(token.trim(), {
           storage_key: storageKey,
           kind,
           title: title || "",
-          tags: parseTags(tagsText),
+          tags: canonicalTags,
           source: source || "",
           license: license || "",
         });
@@ -236,6 +348,9 @@ export default function AdminAudioLibrary() {
         <div className="md:col-span-2">
           <Label>Tags (séparés par virgule)</Label>
           <Input value={tagsText} onChange={(e) => setTagsText(e.target.value)} className="mt-2" disabled={!hasToken || isLoading} />
+          <div className="text-xs text-muted-foreground mt-2">
+            Enregistré (canonique EN): <code>{parseTags(tagsText).join(", ") || "—"}</code>
+          </div>
         </div>
         <div>
           <Label>Source</Label>
@@ -347,6 +462,70 @@ export default function AdminAudioLibrary() {
 
       <GlassCard padding="lg">
         <div className="space-y-3">
+          <div className="font-medium">Recherche (métadonnées)</div>
+          <div className="grid gap-3 md:grid-cols-4 items-end">
+            <div className="md:col-span-2">
+              <Label htmlFor="meta-q">Recherche (titre / chemin)</Label>
+              <Input id="meta-q" value={metaQ} onChange={(e) => setMetaQ(e.target.value)} className="mt-2" placeholder="ex: ocean / slowlife" />
+            </div>
+            <div>
+              <Label htmlFor="meta-kind">Type</Label>
+              <select
+                id="meta-kind"
+                className="mt-2 flex h-10 w-full items-center rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={metaKind}
+                onChange={(e) => setMetaKind(e.target.value)}
+              >
+                <option value="">Tous</option>
+                <option value="music">Musique</option>
+                <option value="ambience">Ambiances</option>
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="meta-tag">Tag (FR/EN)</Label>
+              <Input id="meta-tag" value={metaTag} onChange={(e) => setMetaTag(e.target.value)} className="mt-2" placeholder="ex: pluie / rain" />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button variant="secondary" onClick={loadMeta} disabled={!hasToken || isLoading}>
+              Rechercher
+            </Button>
+          </div>
+
+          <div className="grid gap-3">
+            {assets.length === 0 ? (
+              <div className="text-sm text-muted-foreground">Aucun résultat.</div>
+            ) : (
+              assets.slice(0, 60).map((a) => (
+                <div key={a.storage_key} className="rounded-md border border-border p-3 space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium truncate">
+                        {a.title || "—"}{" "}
+                        <span className="text-xs text-muted-foreground">· {a.kind}</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        <code>{a.storage_key}</code>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {(a.tags || []).length ? (a.tags || []).map(prettyTag).join(" · ") : "Tags: —"}
+                      </div>
+                    </div>
+                  </div>
+                  <AssetEditor
+                    storageKey={a.storage_key}
+                    kind={(String(a.kind) === "music" ? "music" : "ambience") as any}
+                    defaultTitle={a.title || a.storage_key.split("/").pop()?.split(".")[0] || ""}
+                  />
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </GlassCard>
+
+      <GlassCard padding="lg">
+        <div className="space-y-3">
           <div className="font-medium">Lister les fichiers existants</div>
           <div className="grid gap-3 md:grid-cols-3 items-end">
             <div className="md:col-span-2">
@@ -354,10 +533,25 @@ export default function AdminAudioLibrary() {
               <Input id="prefix" value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="music/ ou ambiences/" className="mt-2" />
             </div>
             <div className="flex justify-end">
-              <Button variant="secondary" onClick={loadAll} disabled={!hasToken || isLoading}>
+              <Button variant="secondary" onClick={loadStorage} disabled={!hasToken || isLoading}>
                 Recharger
               </Button>
             </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm text-muted-foreground">
+              Astuce: clique un “dossier” pour naviguer. Prefix courant: <code>{prefix || "—"}</code>
+            </div>
+            <UploadControl
+              disabled={!hasToken || isLoading}
+              onFile={(f) => {
+                const safeName = String(f.name || "audio").replace(/\s+/g, "-");
+                const base = (prefix || "").trim();
+                const p = base.endsWith("/") || base === "" ? base : base + "/";
+                onUploadToKey(`${p}${safeName}`.replaceAll("//", "/"), f);
+              }}
+            />
           </div>
 
           <div className="grid gap-2">
@@ -366,18 +560,46 @@ export default function AdminAudioLibrary() {
             ) : (
               items.map((it, idx) => {
                 const name = String((it as any).name || (it as any).id || "");
+                const isFolder = name && !name.includes(".");
+                const p = (prefix || "").trim();
+                const basePrefix = p.endsWith("/") || p === "" ? p : p + "/";
+                const fullKey = `${basePrefix}${name}`.replaceAll("//", "/");
                 return (
                   <div key={name || idx} className="rounded-md border border-border p-3 flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-sm font-medium truncate">{name}</div>
+                      <button
+                        className="text-sm font-medium truncate text-left hover:underline disabled:no-underline"
+                        disabled={!isFolder}
+                        onClick={() => {
+                          if (!isFolder) return;
+                          const next = `${basePrefix}${name}/`.replaceAll("//", "/");
+                          setPrefix(next);
+                        }}
+                      >
+                        {isFolder ? `📁 ${name}` : `🎵 ${name}`}
+                      </button>
                       <div className="text-xs text-muted-foreground truncate">
                         {(it as any).updated_at ? <span>maj: {(it as any).updated_at}</span> : null}
                       </div>
                     </div>
                     <div className="flex gap-2 shrink-0">
-                      <Button variant="destructive" onClick={() => onDelete(`${prefix}${name}`)} disabled={!hasToken || isLoading}>
-                        Supprimer
-                      </Button>
+                      {!isFolder ? (
+                        <>
+                          <Button
+                            variant="secondary"
+                            onClick={() => {
+                              setMoveSource(fullKey);
+                              setMoveDest(fullKey);
+                            }}
+                            disabled={!hasToken || isLoading}
+                          >
+                            Renommer
+                          </Button>
+                          <Button variant="destructive" onClick={() => onDelete(fullKey)} disabled={!hasToken || isLoading}>
+                            Supprimer
+                          </Button>
+                        </>
+                      ) : null}
                     </div>
                   </div>
                 );

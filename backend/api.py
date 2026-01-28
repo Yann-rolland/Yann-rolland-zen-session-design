@@ -479,7 +479,14 @@ def admin_storage_list(request: Request, prefix: str = "", limit: int = 200, off
 
 
 @router.get("/admin/audio_assets")
-def admin_list_audio_assets(request: Request, kind: str | None = None, q: str | None = None, limit: int = 200, offset: int = 0):
+def admin_list_audio_assets(
+    request: Request,
+    kind: str | None = None,
+    q: str | None = None,
+    tag: str | None = None,
+    limit: int = 200,
+    offset: int = 0,
+):
     """
     List audio asset metadata stored in DB (admin only).
     """
@@ -487,7 +494,7 @@ def admin_list_audio_assets(request: Request, kind: str | None = None, q: str | 
     if not db_enabled():
         raise HTTPException(status_code=503, detail="DB disabled (DATABASE_URL/psycopg missing)")
     try:
-        items = list_audio_assets(kind=kind, q=q, limit=limit, offset=offset)
+        items = list_audio_assets(kind=kind, q=q, tag=tag, limit=limit, offset=offset)
         return {"items": items}
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"DB error: {e}")

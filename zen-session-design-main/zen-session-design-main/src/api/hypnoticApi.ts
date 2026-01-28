@@ -531,12 +531,13 @@ export type AudioAsset = {
 
 export async function adminListAudioAssets(
   adminToken: string,
-  params?: { kind?: string; q?: string; limit?: number; offset?: number },
+  params?: { kind?: string; q?: string; tag?: string; limit?: number; offset?: number },
 ): Promise<{ items: AudioAsset[] }> {
   const base = getApiBase();
   const sp = new URLSearchParams();
   if (params?.kind) sp.set("kind", params.kind);
   if (params?.q) sp.set("q", params.q);
+  if (params?.tag) sp.set("tag", params.tag);
   if (params?.limit != null) sp.set("limit", String(params.limit));
   if (params?.offset != null) sp.set("offset", String(params.offset));
   const url = joinUrl(base, `/admin/audio_assets?${sp.toString()}`);
