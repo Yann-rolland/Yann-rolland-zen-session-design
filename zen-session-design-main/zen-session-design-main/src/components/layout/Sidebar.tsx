@@ -13,7 +13,6 @@ import {
   Moon,
   ChevronLeft,
   ChevronRight,
-  Shield,
   MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,13 +36,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { user, logout } = useAuth();
   const { settings, updateSettings } = useApp();
 
-  // Always show Admin entries. Actual access is protected by the code (x-admin-token) on the backend.
-  // This avoids a dead-end where an admin cannot reach the page to enter the code the first time.
-  const allNavItems = [
-    ...navItems,
-    { to: "/admin/settings", icon: Shield, label: "Admin" },
-    { to: "/admin/library", icon: Shield, label: "Audio" },
-  ];
+  const allNavItems = navItems;
 
   return (
     <aside

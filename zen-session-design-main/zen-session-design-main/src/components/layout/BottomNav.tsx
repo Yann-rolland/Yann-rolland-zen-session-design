@@ -1,6 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
-import { Clock, Home, Settings, Shield, User, MessageCircle } from "lucide-react";
+import { Clock, Home, Settings, User, MessageCircle } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 
 const navItems = [
@@ -14,12 +14,7 @@ export function BottomNav() {
   const location = useLocation();
   const { isAuthenticated } = useAuth();
 
-  // Always show Admin entries. Actual access is protected by the code (x-admin-token) on the backend.
-  const allNavItems = [
-    ...navItems,
-    { to: "/admin/settings", icon: Shield, label: "Admin" },
-    { to: "/admin/library", icon: Shield, label: "Audio" },
-  ];
+  const allNavItems = navItems;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden">
