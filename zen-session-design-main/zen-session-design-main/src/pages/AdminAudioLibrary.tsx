@@ -156,6 +156,37 @@ export default function AdminAudioLibrary() {
       .filter(Boolean)
       .slice(0, 30);
 
+  const UploadControl = (props: { disabled: boolean; onFile: (file: File) => void }) => {
+    const { disabled, onFile } = props;
+    const inputRef = React.useRef<HTMLInputElement | null>(null);
+    return (
+      <div className="shrink-0">
+        <input
+          ref={inputRef}
+          type="file"
+          accept="audio/*"
+          className="hidden"
+          disabled={disabled}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) onFile(f);
+            e.currentTarget.value = "";
+          }}
+        />
+        <Button
+          variant="secondary"
+          disabled={disabled}
+          onClick={() => {
+            // Trigger file dialog reliably (some browsers don't open it when clicking a button inside a <label>).
+            inputRef.current?.click();
+          }}
+        >
+          Uploader
+        </Button>
+      </div>
+    );
+  };
+
   const AssetEditor = (props: { storageKey: string; kind: "music" | "ambience"; defaultTitle: string }) => {
     const { storageKey, kind, defaultTitle } = props;
     const existing = assetsByKey.get(storageKey);
@@ -282,22 +313,7 @@ export default function AdminAudioLibrary() {
                         <code>{key}</code> · {ok ? "OK" : "manquant"}
                       </div>
                     </div>
-                    <label className="inline-flex">
-                      <input
-                        type="file"
-                        accept="audio/*"
-                        className="hidden"
-                        disabled={!hasToken || isLoading}
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) onUploadToKey(key, f);
-                          e.currentTarget.value = "";
-                        }}
-                      />
-                      <Button variant="secondary" disabled={!hasToken || isLoading}>
-                        Uploader
-                      </Button>
-                    </label>
+                    <UploadControl disabled={!hasToken || isLoading} onFile={(f) => onUploadToKey(key, f)} />
                   </div>
                   <AssetEditor storageKey={key} kind="music" defaultTitle={defaultTitle} />
                 </div>
@@ -319,22 +335,7 @@ export default function AdminAudioLibrary() {
                         <code>{key}</code> · {ok ? "OK" : "manquant"}
                       </div>
                     </div>
-                    <label className="inline-flex">
-                      <input
-                        type="file"
-                        accept="audio/*"
-                        className="hidden"
-                        disabled={!hasToken || isLoading}
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) onUploadToKey(key, f);
-                          e.currentTarget.value = "";
-                        }}
-                      />
-                      <Button variant="secondary" disabled={!hasToken || isLoading}>
-                        Uploader
-                      </Button>
-                    </label>
+                    <UploadControl disabled={!hasToken || isLoading} onFile={(f) => onUploadToKey(key, f)} />
                   </div>
                   <AssetEditor storageKey={key} kind="ambience" defaultTitle={defaultTitle} />
                 </div>
