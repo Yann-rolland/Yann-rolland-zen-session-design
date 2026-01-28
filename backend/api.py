@@ -28,6 +28,7 @@ from models import (GenerationRequest, GenerationResponse, HypnosisText,
 from music import generate_music_bed
 from prompts import build_prompt
 from tts import synthesize_tts_cached
+from urllib.parse import urlparse
 from supabase_storage import build_default_catalog, storage_enabled
 from supabase_auth import get_current_user
 
@@ -212,6 +213,32 @@ def debug_env():
         "OLLAMA_MODEL": os.environ.get("OLLAMA_MODEL", None),
         "OLLAMA_NUM_GPU": os.environ.get("OLLAMA_NUM_GPU", None),
     }
+
+@router.get("/debug/db_ping")
+def debug_db_ping():
+    """
+    Vérifie réellement la connexion Postgres (SELECT 1).
+    Ne renvoie jamais l'URL complète ni de secrets.
+    """
+    if not db_enabled():
+        return {"ok": False, "error": "DB disabled (DATABASE_URL/psycopg missing)"}
+    try:
+        from db import get_database_url, get_conn
+
+        db_url = get_database_url()
+        host = None
+        try:
+            host = urlparse(db_url).hostname
+        except Exception:
+            host = None
+
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("select 1;")
+                _ = cur.fetchone()
+        return {"ok": True, "host": host}
+    except Exception as e:
+        return {"ok": False, "host": host, "error": str(e)}
 
 
 @router.get("/debug/gemini/models")
