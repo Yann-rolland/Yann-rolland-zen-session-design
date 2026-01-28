@@ -3,6 +3,7 @@ import {
   BackendObjectif,
   BackendStyle,
   generateSession,
+  getApiBase,
 } from "@/api/hypnoticApi";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
@@ -288,7 +289,10 @@ export function CreateSessionForm({ onSessionCreated, className }: CreateSession
             {error}
           </div>
           <div className="text-xs text-muted-foreground mt-2">
-            Vérifie que le backend est lancé (ex: `http://127.0.0.1:8006/health`) et que `VITE_API_BASE` pointe au bon endroit.
+            API: <code>{getApiBase()}</code>
+            <div className="mt-1">
+              Vérifie que le backend répond sur <code>/health</code> et que <code>VITE_API_BASE</code> pointe au bon endroit.
+            </div>
           </div>
         </GlassCard>
       ) : null}

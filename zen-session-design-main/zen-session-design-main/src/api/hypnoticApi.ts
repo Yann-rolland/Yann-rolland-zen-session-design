@@ -386,11 +386,30 @@ export async function generateSession(payload: GenerationRequest): Promise<Gener
   const base = getApiBase();
   const url = joinUrl(base, "/generate");
   const auth = await authHeader();
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...auth },
-    body: JSON.stringify(payload),
-  });
+  const doFetch = async () => {
+    return await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...auth },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    });
+  };
+
+  let res: Response;
+  try {
+    res = await doFetch();
+  } catch (e: any) {
+    // Render free instances can be sleeping; a first request may fail or take time.
+    // Retry once after a short delay for better UX.
+    const msg = e?.message || String(e);
+    await new Promise((r) => setTimeout(r, 1500));
+    try {
+      res = await doFetch();
+    } catch (e2: any) {
+      const msg2 = e2?.message || String(e2);
+      throw new Error(`Failed to fetch (url=${url}). ${msg2 || msg}`);
+    }
+  }
   if (!res.ok) {
     const msg = await res.text().catch(() => "");
     throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
