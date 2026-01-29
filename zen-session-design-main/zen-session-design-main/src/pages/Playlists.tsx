@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { getPlaylist, listPlaylists, type PlaylistItem, type PlaylistSummary } from "@/api/hypnoticApi";
+import { getApiBase, getPlaylist, listPlaylists, type PlaylistItem, type PlaylistSummary } from "@/api/hypnoticApi";
+import { useAuth } from "@/contexts/AuthContext";
 import { Music2, Play, Pause, SkipBack, SkipForward, Search } from "lucide-react";
 
 function fmtTime(s: number): string {
@@ -16,6 +17,7 @@ function fmtTime(s: number): string {
 
 export default function Playlists() {
   const { toast } = useToast();
+  const { isAuthenticated } = useAuth();
   const [lists, setLists] = React.useState<PlaylistSummary[]>([]);
   const [selected, setSelected] = React.useState<PlaylistSummary | null>(null);
   const [items, setItems] = React.useState<PlaylistItem[]>([]);
@@ -158,6 +160,9 @@ export default function Playlists() {
         <div>
           <h1 className="text-2xl font-bold">Playlists</h1>
           <p className="text-muted-foreground">Des ambiances prêtes, classées par thèmes (comme Spotify).</p>
+          <div className="text-xs text-muted-foreground mt-1">
+            API: <code>{getApiBase()}</code> · Auth: <code>{isAuthenticated ? "ok" : "non connecté"}</code>
+          </div>
         </div>
         <Button variant="secondary" onClick={loadLists} disabled={isLoading}>
           Rafraîchir

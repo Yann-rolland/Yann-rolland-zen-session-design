@@ -602,7 +602,7 @@ export async function listPlaylists(): Promise<{ playlists: PlaylistSummary[] }>
   const res = await fetch(url, { method: "GET", headers, cache: "no-store" });
   if (!res.ok) {
     const msg = await res.text().catch(() => "");
-    throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
+    throw new Error(`${msg || "Erreur API"} (status=${res.status}, url=${url})`);
   }
   return res.json();
 }
@@ -614,7 +614,7 @@ export async function getPlaylist(tag: string, limit = 50): Promise<{ playlist: 
   const res = await fetch(url, { method: "GET", headers, cache: "no-store" });
   if (!res.ok) {
     const msg = await res.text().catch(() => "");
-    throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
+    throw new Error(`${msg || "Erreur API"} (status=${res.status}, url=${url})`);
   }
   return res.json();
 }

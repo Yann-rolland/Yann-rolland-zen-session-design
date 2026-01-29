@@ -12,11 +12,14 @@ import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { NavLink } from "react-router-dom";
+import { adminGetAppConfig } from "@/api/hypnoticApi";
+import { useToast } from "@/hooks/use-toast";
 
 const SS_ADMIN_TOKEN = "bn3_admin_token_v1";
 
 export default function Settings() {
   const { settings, updateSettings, defaultConfig, updateDefaultConfig } = useApp();
+  const { toast } = useToast();
   const [adminToken, setAdminToken] = React.useState<string>(() => {
     try {
       return sessionStorage.getItem(SS_ADMIN_TOKEN) || "";
@@ -224,6 +227,29 @@ export default function Settings() {
                     <Music2 className="w-4 h-4" />
                     Admin · Audio (bibliothèque)
                   </NavLink>
+                </Button>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    const tok = adminToken.trim();
+                    if (!tok) return;
+                    try {
+                      await adminGetAppConfig(tok);
+                      toast({ title: "Code admin OK", description: "Le backend accepte ce code." });
+                    } catch (e: any) {
+                      toast({
+                        title: "Code admin invalide",
+                        description: e?.message || String(e),
+                        variant: "destructive",
+                      });
+                    }
+                  }}
+                  disabled={!adminToken.trim()}
+                >
+                  Tester le code
                 </Button>
               </div>
             </div>
