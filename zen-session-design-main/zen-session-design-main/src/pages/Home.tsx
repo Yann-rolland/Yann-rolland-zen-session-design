@@ -8,6 +8,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
 import { AmbienceMixer } from "@/components/player/AmbienceMixer";
 import { Sparkles, ArrowLeft } from "lucide-react";
+import { NavLink } from "react-router-dom";
 
 export default function Home() {
   const { currentSession, setCurrentSession, playerState, settings, defaultConfig } = useApp();
@@ -67,6 +68,19 @@ export default function Home() {
           <div className="zen-hide">
             <AmbienceMixer binauralUrl={null} initialConfig={defaultConfig} defaultOpen={false} />
           </div>
+          <GlassCard padding="lg" className="zen-hide">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <div className="font-semibold">Playlists</div>
+                <div className="text-sm text-muted-foreground">
+                  Des sons prêts par thème (sommeil, pluie, focus…), comme Spotify.
+                </div>
+              </div>
+              <Button asChild>
+                <NavLink to="/playlists">Voir</NavLink>
+              </Button>
+            </div>
+          </GlassCard>
           <CreateSessionForm onSessionCreated={handleSessionCreated} />
         </div>
       )}

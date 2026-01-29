@@ -15,6 +15,7 @@ import AdminInsights from "./pages/AdminInsights";
 import AdminSettings from "./pages/AdminSettings";
 import AdminAudioLibrary from "./pages/AdminAudioLibrary";
 import Chat from "./pages/Chat";
+import Playlists from "./pages/Playlists";
 
 const queryClient = new QueryClient();
 
@@ -60,6 +61,14 @@ const App = () => (
                 element={
                   <AppLayout>
                     <Chat />
+                  </AppLayout>
+                }
+              />
+              <Route
+                path="/playlists"
+                element={
+                  <AppLayout>
+                    <Playlists />
                   </AppLayout>
                 }
               />

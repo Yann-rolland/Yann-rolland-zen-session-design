@@ -585,6 +585,40 @@ export async function adminDeleteAudioAsset(
   return res.json();
 }
 
+export type PlaylistSummary = {
+  tag: string;
+  title: string;
+  subtitle?: string;
+  kind?: string;
+  count: number;
+};
+
+export type PlaylistItem = AudioAsset & { signed_url?: string | null };
+
+export async function listPlaylists(): Promise<{ playlists: PlaylistSummary[] }> {
+  const base = getApiBase();
+  const url = joinUrl(base, `/playlists`);
+  const headers = await authHeader();
+  const res = await fetch(url, { method: "GET", headers, cache: "no-store" });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
+  }
+  return res.json();
+}
+
+export async function getPlaylist(tag: string, limit = 50): Promise<{ playlist: any; items: PlaylistItem[] }> {
+  const base = getApiBase();
+  const url = joinUrl(base, `/playlists/${encodeURIComponent(tag)}?limit=${encodeURIComponent(String(limit))}`);
+  const headers = await authHeader();
+  const res = await fetch(url, { method: "GET", headers, cache: "no-store" });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(msg || `Erreur API: ${res.status} (url=${url})`);
+  }
+  return res.json();
+}
+
 export interface ChatHistoryMessage {
   id: string;
   role: "user" | "model";

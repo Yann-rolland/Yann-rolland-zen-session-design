@@ -47,6 +47,7 @@ from supabase_storage import (
     expected_audio_paths,
     list_objects,
     move_object,
+    sign_url,
     storage_enabled,
     upload_object,
 )
@@ -55,6 +56,21 @@ from admin_app_config import load_admin_app_config, rollback_admin_app_config, s
 from llm_gemini import chat_gemini
 
 router = APIRouter()
+
+# User-facing playlists (Spotify-like): we build themed playlists from audio_assets tags.
+# Tags are stored canonically in EN (e.g., sleep/relax/rain/ocean/fire).
+PLAYLIST_THEMES = [
+    {"tag": "sleep", "title": "Sommeil", "subtitle": "Sons doux pour s'endormir", "kind": "ambience"},
+    {"tag": "relax", "title": "Détente", "subtitle": "Ambiances calmes et apaisantes", "kind": "ambience"},
+    {"tag": "focus", "title": "Concentration", "subtitle": "Rester centré, sans distraction", "kind": "ambience"},
+    {"tag": "meditation", "title": "Méditation", "subtitle": "Présence, respiration, lenteur", "kind": "ambience"},
+    {"tag": "rain", "title": "Pluie", "subtitle": "Pluie, orage, gouttes", "kind": "ambience"},
+    {"tag": "ocean", "title": "Océan", "subtitle": "Vagues, mer, rivage", "kind": "ambience"},
+    {"tag": "fire", "title": "Feu", "subtitle": "Cheminée, crépitements", "kind": "ambience"},
+    {"tag": "forest", "title": "Forêt", "subtitle": "Nature, oiseaux, bois", "kind": "ambience"},
+    {"tag": "wind", "title": "Vent", "subtitle": "Vent, souffle, air", "kind": "ambience"},
+    {"tag": "zen", "title": "Zen", "subtitle": "Sélection zen (mix)", "kind": "ambience"},
+]
 
 def _require_admin(request: Request) -> None:
     """
@@ -291,6 +307,80 @@ def cloud_audio_catalog():
     if not storage_enabled():
         return {"enabled": False, "music": {}, "ambiences": {}}
     return build_default_catalog()
+
+
+@router.get("/playlists")
+def playlists(request: Request):
+    """
+    User-facing themed playlists (requires auth).
+    Built from audio_assets metadata in DB + Supabase Storage signed URLs.
+    """
+    _ = get_current_user(request)
+    if not db_enabled():
+        raise HTTPException(status_code=503, detail="DB disabled (DATABASE_URL/psycopg missing)")
+
+    out = []
+    for p in PLAYLIST_THEMES:
+        tag = str(p.get("tag") or "").strip()
+        kind = str(p.get("kind") or "").strip() or None
+        try:
+            items = list_audio_assets(kind=kind, tag=tag, limit=1, offset=0)
+            # We don't want to pull all items just to count; do a cheap count query:
+            # Best-effort using LIMIT 1000 then len (still fine for MVP).
+            # If you later have many assets, we'll replace with a COUNT(*) query.
+            items_full = list_audio_assets(kind=kind, tag=tag, limit=1000, offset=0)
+            count = len(items_full)
+        except Exception:
+            count = 0
+        out.append(
+            {
+                "tag": tag,
+                "title": p.get("title"),
+                "subtitle": p.get("subtitle"),
+                "kind": p.get("kind"),
+                "count": int(count),
+            }
+        )
+    return {"playlists": out}
+
+
+@router.get("/playlists/{tag}")
+def playlist_items(tag: str, request: Request, limit: int = 50):
+    """
+    Returns playlist items for a given theme tag.
+    Includes signed_url for playback (bucket private).
+    """
+    _ = get_current_user(request)
+    if not db_enabled():
+        raise HTTPException(status_code=503, detail="DB disabled (DATABASE_URL/psycopg missing)")
+    limit = max(1, min(int(limit or 50), 200))
+    tag = str(tag or "").strip().lower()
+
+    # Find metadata for the playlist (fallback to tag)
+    meta = next((p for p in PLAYLIST_THEMES if str(p.get("tag") or "").lower() == tag), None)
+    kind = (str(meta.get("kind")) if isinstance(meta, dict) else "") or None
+
+    try:
+        items = list_audio_assets(kind=kind, tag=tag, limit=limit, offset=0)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"DB error: {e}")
+
+    # Attach signed URLs (best effort). If storage isn't enabled, return without URLs.
+    expires = int(os.environ.get("SUPABASE_SIGNED_URL_EXPIRES", "3600") or 3600)
+    out_items = []
+    for it in items:
+        k = str((it or {}).get("storage_key") or "").lstrip("/")
+        signed = sign_url(k, expires_in=expires) if (storage_enabled() and k) else None
+        out_items.append({**it, "signed_url": signed})
+
+    return {
+        "playlist": {
+            "tag": tag,
+            "title": (meta.get("title") if isinstance(meta, dict) else None) or tag,
+            "subtitle": (meta.get("subtitle") if isinstance(meta, dict) else None) or "",
+        },
+        "items": out_items,
+    }
 
 
 @router.get("/chat/history")
