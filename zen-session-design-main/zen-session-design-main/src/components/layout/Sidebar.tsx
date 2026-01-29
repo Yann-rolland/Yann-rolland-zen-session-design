@@ -9,7 +9,6 @@ import {
   Settings,
   LogOut,
   User,
-  Sparkles,
   Moon,
   ChevronLeft,
   ChevronRight,
@@ -18,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { AppLogo } from "@/components/ui/AppLogo";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -54,9 +54,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       )}>
         {!collapsed && (
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-primary-foreground" />
-            </div>
+            <AppLogo size={32} rounded="rounded-lg" />
             <span className="font-semibold text-lg">MaÏa</span>
           </div>
         )}

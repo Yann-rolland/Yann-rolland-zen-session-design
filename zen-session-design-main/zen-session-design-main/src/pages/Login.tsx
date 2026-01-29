@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
-import { Sparkles, Mail, Lock, User, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, User, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+import { AppLogo } from "@/components/ui/AppLogo";
 
 export default function Login() {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -103,8 +104,8 @@ export default function Login() {
       <div className="w-full max-w-md relative fade-in">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-primary mb-4 shadow-glow">
-            <Sparkles className="w-8 h-8 text-primary-foreground" />
+          <div className="inline-flex items-center justify-center mb-4">
+            <AppLogo size={72} rounded="rounded-3xl" />
           </div>
           <h1 className="text-2xl font-bold text-gradient-primary">MaÏa</h1>
           <p className="text-muted-foreground mt-2">

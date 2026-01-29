@@ -7,7 +7,8 @@ import { PhaseAccordion } from "@/components/session/PhaseAccordion";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/button";
 import { AmbienceMixer } from "@/components/player/AmbienceMixer";
-import { Sparkles, ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import { AppLogo } from "@/components/ui/AppLogo";
 import { NavLink } from "react-router-dom";
 
 export default function Home() {
@@ -26,8 +27,8 @@ export default function Home() {
       {/* Hero Section - Only show when no session */}
       {!currentSession && (
         <div className="text-center py-8 md:py-12">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-primary mb-6 shadow-glow">
-            <Sparkles className="w-8 h-8 text-primary-foreground" />
+          <div className="inline-flex items-center justify-center mb-6">
+            <AppLogo size={84} rounded="rounded-3xl" />
           </div>
           <h1 className="text-3xl md:text-4xl font-bold mb-3 text-gradient-primary">
             MaÏa
