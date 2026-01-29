@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/collapsible";
 import { MUSIC_TRACKS, musicFileForId } from "@/audio/musicLibrary";
 import { makeNoiseBuffer, rampGain } from "@/audio/noiseGenerators";
-import { getApiBase, getCloudAudioCatalog, libraryUrl } from "@/api/hypnoticApi";
+import { getApiBase, getAudioLibrary, getCloudAudioCatalog, libraryUrl, type AudioLibraryItem } from "@/api/hypnoticApi";
 import { AmbianceType, BinauralType, MusicTrackId, SessionConfig } from "@/types";
 import { ChevronDown, ChevronUp, Music2, Cloud, Waves } from "lucide-react";
 
@@ -73,6 +73,10 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
   const [musicTrackId, setMusicTrackId] = React.useState<MusicTrackId>(initialConfig.musicTrackId);
   const [ambianceType, setAmbianceType] = React.useState<AmbianceType>(initialConfig.ambianceType);
   const [binauralType, setBinauralType] = React.useState<BinauralType>(initialConfig.binauralType);
+  const [musicSource, setMusicSource] = React.useState<"catalog" | "library">("catalog");
+  const [noiseSource, setNoiseSource] = React.useState<"preset" | "library">("preset");
+  const [libraryMusicKey, setLibraryMusicKey] = React.useState<string>("");
+  const [libraryAmbienceKey, setLibraryAmbienceKey] = React.useState<string>("");
 
   const [playMusic, setPlayMusic] = React.useState<boolean>(Boolean(initialConfig.playMusic));
   const [playNoise, setPlayNoise] = React.useState<boolean>(Boolean(initialConfig.playNoise));
@@ -89,6 +93,9 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
   const [cloudCatalogError, setCloudCatalogError] = React.useState<string>("");
   const [lastMusicUrlDebug, setLastMusicUrlDebug] = React.useState<string>("");
   const [lastMusicErrorDebug, setLastMusicErrorDebug] = React.useState<string>("");
+  const [audioLibrary, setAudioLibrary] = React.useState<{ music: AudioLibraryItem[]; ambiences: AudioLibraryItem[] } | null>(null);
+  const [audioLibraryStatus, setAudioLibraryStatus] = React.useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [audioLibraryError, setAudioLibraryError] = React.useState<string>("");
   const isMountedRef = React.useRef(true);
   const stopTimeoutRef = React.useRef<number | null>(null);
   const stopTokenRef = React.useRef<number>(0);
@@ -145,6 +152,34 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
     };
   }, []);
 
+  // Load user library (signed URLs) to allow picking from a growing catalog.
+  React.useEffect(() => {
+    let alive = true;
+    setAudioLibraryStatus("loading");
+    (async () => {
+      try {
+        const res = await getAudioLibrary(500);
+        if (!alive) return;
+        const music = (res.music || []).filter((x: any) => Boolean(x?.signed_url));
+        const amb = (res.ambiences || []).filter((x: any) => Boolean(x?.signed_url));
+        setAudioLibrary({ music, ambiences: amb });
+        setAudioLibraryError("");
+        setAudioLibraryStatus("ready");
+        if (!libraryMusicKey && music.length) setLibraryMusicKey(String(music[0].storage_key));
+        if (!libraryAmbienceKey && amb.length) setLibraryAmbienceKey(String(amb[0].storage_key));
+      } catch (e: any) {
+        if (!alive) return;
+        setAudioLibrary({ music: [], ambiences: [] });
+        setAudioLibraryError(e?.message || "Impossible de charger la bibliothèque audio.");
+        setAudioLibraryStatus("error");
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const ensureCloudCatalogLoaded = async () => {
     if (cloudCatalog) return cloudCatalog;
     setCloudCatalogStatus("loading");
@@ -180,6 +215,8 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
     setMusicVol(pctTo01(initialConfig.musicVolume));
     setNoiseVol(pctTo01(initialConfig.ambianceVolume));
     setBinauralVol(pctTo01(initialConfig.binauralVolume));
+    setMusicSource("catalog");
+    setNoiseSource("preset");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialConfig, binauralUrl]);
 
@@ -294,16 +331,24 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
       musicElRef.current = new Audio();
       musicElRef.current.preload = "auto";
     }
-    const file = musicFileForId(musicTrackId);
-    const cloudSrc = cloudCatalog?.music?.[musicTrackId];
-    // In production deployments (Vercel/Render), the backend usually does NOT ship local /library MP3 assets.
-    // If no cloud catalog is configured, avoid trying to play a 404 HTML page as audio (browser shows "no compatible source").
-    if (!cloudSrc && import.meta.env.PROD) {
-      throw new Error(
-        "Catalogue audio non prêt (ou musique manquante). Vérifie VITE_API_BASE et le chargement du catalogue, puis réessaie."
-      );
+    let src = "";
+    if (musicSource === "library") {
+      const lib = audioLibrary?.music || [];
+      const it: any = lib.find((x: any) => String(x.storage_key) === String(libraryMusicKey));
+      src = String(it?.signed_url || "");
+      if (!src) throw new Error("Aucune musique disponible dans la bibliothèque (ou URLs signées absentes).");
+    } else {
+      const file = musicFileForId(musicTrackId);
+      const cloudSrc = cloudCatalog?.music?.[musicTrackId];
+      // In production deployments (Vercel/Render), the backend usually does NOT ship local /library MP3 assets.
+      // If no cloud catalog is configured, avoid trying to play a 404 HTML page as audio (browser shows "no compatible source").
+      if (!cloudSrc && import.meta.env.PROD) {
+        throw new Error(
+          "Catalogue audio non prêt (ou musique manquante). Vérifie VITE_API_BASE et le chargement du catalogue, puis réessaie."
+        );
+      }
+      src = cloudSrc || libraryUrl(`/library/music/user/${file}`);
     }
-    const src = cloudSrc || libraryUrl(`/library/music/user/${file}`);
     musicElRef.current.crossOrigin = "anonymous";
     musicElRef.current.src = src;
     musicElRef.current.loop = true;
@@ -359,6 +404,25 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
 
     stopNoise();
 
+    if (noiseSource === "library") {
+      const lib = audioLibrary?.ambiences || [];
+      const it: any = lib.find((x: any) => String(x.storage_key) === String(libraryAmbienceKey));
+      const src = String(it?.signed_url || "");
+      if (!src) throw new Error("Aucune ambiance disponible dans la bibliothèque (ou URLs signées absentes).");
+      if (!ambienceElRef.current) {
+        ambienceElRef.current = new Audio();
+        ambienceElRef.current.preload = "auto";
+      }
+      ambienceElRef.current.crossOrigin = "anonymous";
+      ambienceElRef.current.src = src;
+      ambienceElRef.current.loop = true;
+      if (!ambienceNodeRef.current) {
+        ambienceNodeRef.current = ctx.createMediaElementSource(ambienceElRef.current);
+        ambienceNodeRef.current.connect(gain);
+      }
+      return;
+    }
+
     // Prefer a cloud ambience track if available (same ambianceType key)
     const cloudSrc = cloudCatalog?.ambiences?.[ambianceType];
     if (cloudSrc) {
@@ -413,7 +477,9 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
         rampGain(musicGainRef.current, 0, 200);
       }
 
-      if (playNoise && ambianceType !== "none") {
+      const noiseEnabled =
+        playNoise && (noiseSource === "library" ? Boolean(libraryAmbienceKey) : ambianceType !== "none");
+      if (noiseEnabled) {
         await buildNoise();
         if (noiseSrcRef.current) {
           noiseSrcRef.current.start?.();
@@ -468,7 +534,7 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [musicTrackId]);
+  }, [musicTrackId, musicSource, libraryMusicKey]);
 
   React.useEffect(() => {
     if (!isPlaying || !playNoise) return;
@@ -485,7 +551,7 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ambianceType]);
+  }, [ambianceType, noiseSource, libraryAmbienceKey]);
 
   React.useEffect(() => {
     if (!isPlaying || !playBinaural) return;
@@ -516,8 +582,17 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
 
   const binauralDisabled = !binauralUrl;
 
-  const musicLabel = MUSIC_TRACKS.find((t) => t.id === musicTrackId)?.label || "—";
-  const noiseLabel = ambianceOptions.find((o) => o.value === ambianceType)?.label || "—";
+  const libraryMusicLabel =
+    (audioLibrary?.music || []).find((x: any) => String(x.storage_key) === String(libraryMusicKey))?.title ||
+    (audioLibrary?.music || []).find((x: any) => String(x.storage_key) === String(libraryMusicKey))?.storage_key ||
+    "—";
+  const libraryAmbienceLabel =
+    (audioLibrary?.ambiences || []).find((x: any) => String(x.storage_key) === String(libraryAmbienceKey))?.title ||
+    (audioLibrary?.ambiences || []).find((x: any) => String(x.storage_key) === String(libraryAmbienceKey))?.storage_key ||
+    "—";
+
+  const musicLabel = musicSource === "library" ? libraryMusicLabel : MUSIC_TRACKS.find((t) => t.id === musicTrackId)?.label || "—";
+  const noiseLabel = noiseSource === "library" ? libraryAmbienceLabel : ambianceOptions.find((o) => o.value === ambianceType)?.label || "—";
   const binauralLabel = binauralOptions.find((o) => o.value === binauralType)?.label || "—";
 
   return (
@@ -620,7 +695,7 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
                   <Music2 className="w-4 h-4 text-muted-foreground" />
                   <div>
                     <div className="font-medium">Fond musical</div>
-                    <div className="text-xs text-muted-foreground">Fichiers MP3 servis par le backend</div>
+                    <div className="text-xs text-muted-foreground">Catalogue fixe + bibliothèque (cloud)</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -630,19 +705,54 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
               </div>
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="md:col-span-2 space-y-2">
-                  <Label>Musique (Ambiance 1..4)</Label>
+                  <Label>Source</Label>
                   <NativeSelect
-                    value={musicTrackId}
-                    onChange={(v) => setMusicTrackId(v as MusicTrackId)}
+                    value={musicSource}
+                    onChange={(v) => setMusicSource(v as any)}
                     disabled={!playMusic || isPlaying}
-                    options={MUSIC_TRACKS.map((t, idx) => ({
-                      value: t.id,
-                      label: `Ambiance ${idx + 1} — ${t.label}`,
-                    }))}
+                    options={[
+                      { value: "catalog", label: "Catalogue (Ambiance 1..4)" },
+                      { value: "library", label: `Bibliothèque (${audioLibrary?.music?.length ?? 0})` },
+                    ]}
                   />
-                  <div className="text-xs text-muted-foreground">
-                    Source: <code>/library/music/user/</code>
-                  </div>
+
+                  {musicSource === "library" ? (
+                    <>
+                      <Label className="mt-2 block">Musique (bibliothèque)</Label>
+                      <NativeSelect
+                        value={libraryMusicKey || ""}
+                        onChange={(v) => setLibraryMusicKey(v)}
+                        disabled={!playMusic || isPlaying || audioLibraryStatus !== "ready"}
+                        options={(audioLibrary?.music || []).map((m: any) => ({
+                          value: String(m.storage_key),
+                          label: String(m.title || m.storage_key),
+                        }))}
+                      />
+                      {audioLibraryStatus !== "ready" ? (
+                        <div className="text-xs text-muted-foreground">
+                          Bibliothèque:{" "}
+                          <code>{audioLibraryStatus === "loading" ? "chargement…" : audioLibraryStatus}</code>
+                          {audioLibraryError ? <span> · {audioLibraryError}</span> : null}
+                        </div>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      <Label className="mt-2 block">Musique (catalogue)</Label>
+                      <NativeSelect
+                        value={musicTrackId}
+                        onChange={(v) => setMusicTrackId(v as MusicTrackId)}
+                        disabled={!playMusic || isPlaying}
+                        options={MUSIC_TRACKS.map((t, idx) => ({
+                          value: t.id,
+                          label: `Ambiance ${idx + 1} — ${t.label}`,
+                        }))}
+                      />
+                      <div className="text-xs text-muted-foreground">
+                        Source: <code>/cloud-audio/catalog</code> (ou fallback dev <code>/library</code>)
+                      </div>
+                    </>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -670,7 +780,7 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
                   <Cloud className="w-4 h-4 text-muted-foreground" />
                   <div>
                     <div className="font-medium">Bruit / Ambiance</div>
-                    <div className="text-xs text-muted-foreground">Généré localement (WebAudio)</div>
+                    <div className="text-xs text-muted-foreground">Prédéfini (noise) + bibliothèque (cloud)</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -680,13 +790,48 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
               </div>
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="md:col-span-2 space-y-2">
-                  <Label>Type</Label>
+                  <Label>Source</Label>
                   <NativeSelect
-                    value={ambianceType}
-                    onChange={(v) => setAmbianceType(v as AmbianceType)}
+                    value={noiseSource}
+                    onChange={(v) => setNoiseSource(v as any)}
                     disabled={!playNoise || isPlaying}
-                    options={ambianceOptions.map((o) => ({ value: o.value, label: o.label }))}
+                    options={[
+                      { value: "preset", label: "Prédéfini (pluie/vent/bruit rose…)" },
+                      { value: "library", label: `Bibliothèque (${audioLibrary?.ambiences?.length ?? 0})` },
+                    ]}
                   />
+
+                  {noiseSource === "library" ? (
+                    <>
+                      <Label className="mt-2 block">Ambiance (bibliothèque)</Label>
+                      <NativeSelect
+                        value={libraryAmbienceKey || ""}
+                        onChange={(v) => setLibraryAmbienceKey(v)}
+                        disabled={!playNoise || isPlaying || audioLibraryStatus !== "ready"}
+                        options={(audioLibrary?.ambiences || []).map((m: any) => ({
+                          value: String(m.storage_key),
+                          label: String(m.title || m.storage_key),
+                        }))}
+                      />
+                      {audioLibraryStatus !== "ready" ? (
+                        <div className="text-xs text-muted-foreground">
+                          Bibliothèque:{" "}
+                          <code>{audioLibraryStatus === "loading" ? "chargement…" : audioLibraryStatus}</code>
+                          {audioLibraryError ? <span> · {audioLibraryError}</span> : null}
+                        </div>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      <Label className="mt-2 block">Type</Label>
+                      <NativeSelect
+                        value={ambianceType}
+                        onChange={(v) => setAmbianceType(v as AmbianceType)}
+                        disabled={!playNoise || isPlaying}
+                        options={ambianceOptions.map((o) => ({ value: o.value, label: o.label }))}
+                      />
+                    </>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -758,13 +903,13 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
             <div className="text-xs text-muted-foreground">
               <div>
                 music:{" "}
-                <a
-                  href={libraryUrl(`/library/music/user/${musicFileForId(musicTrackId)}`)}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  ouvrir
-                </a>
+                {musicSource === "library" ? (
+                  "bibliothèque"
+                ) : (
+                  <a href={libraryUrl(`/library/music/user/${musicFileForId(musicTrackId)}`)} target="_blank" rel="noreferrer">
+                    ouvrir
+                  </a>
+                )}
                 {" · "}
                 binaural:{" "}
                 {binauralUrl ? (

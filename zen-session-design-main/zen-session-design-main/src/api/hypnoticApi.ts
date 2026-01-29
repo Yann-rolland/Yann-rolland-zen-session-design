@@ -625,6 +625,26 @@ export async function getPlaylist(tag: string, limit = 50): Promise<{ playlist: 
   return res.json();
 }
 
+export type AudioLibraryItem = AudioAsset & { signed_url?: string | null };
+export type AudioLibraryResponse = {
+  music: AudioLibraryItem[];
+  ambiences: AudioLibraryItem[];
+  signed_expires_in?: number;
+  storage_enabled?: boolean;
+};
+
+export async function getAudioLibrary(limit = 200): Promise<AudioLibraryResponse> {
+  const base = getApiBase();
+  const url = joinUrl(base, `/audio/library?limit=${encodeURIComponent(String(limit))}`);
+  const headers = await authHeader();
+  const res = await fetch(url, { method: "GET", headers, cache: "no-store" });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(`${msg || "Erreur API"} (status=${res.status}, url=${url})`);
+  }
+  return res.json();
+}
+
 export interface ChatHistoryMessage {
   id: string;
   role: "user" | "model";

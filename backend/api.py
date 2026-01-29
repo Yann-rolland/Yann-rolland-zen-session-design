@@ -383,6 +383,44 @@ def playlist_items(tag: str, request: Request, limit: int = 50):
     }
 
 
+@router.get("/audio/library")
+def audio_library(request: Request, limit: int = 200):
+    """
+    User-facing audio library (requires auth).
+    Returns curated audio_assets from DB + signed URLs from Supabase Storage.
+
+    This is used by the AmbienceMixer to let users pick from a growing library
+    without overwriting the fixed "expected catalog" slots.
+    """
+    _ = get_current_user(request)
+    if not db_enabled():
+        raise HTTPException(status_code=503, detail="DB disabled (DATABASE_URL/psycopg missing)")
+    limit = max(1, min(int(limit or 200), 1000))
+
+    try:
+        music = list_audio_assets(kind="music", limit=limit, offset=0)
+        amb = list_audio_assets(kind="ambience", limit=limit, offset=0)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"DB error: {e}")
+
+    expires = int(os.environ.get("SUPABASE_SIGNED_URL_EXPIRES", "3600") or 3600)
+
+    def attach(items: list[dict]) -> list[dict]:
+        out = []
+        for it in items or []:
+            k = str((it or {}).get("storage_key") or "").lstrip("/")
+            signed = sign_url(k, expires_in=expires) if (storage_enabled() and k) else None
+            out.append({**it, "signed_url": signed})
+        return out
+
+    return {
+        "music": attach(music),
+        "ambiences": attach(amb),
+        "signed_expires_in": expires,
+        "storage_enabled": bool(storage_enabled()),
+    }
+
+
 @router.get("/chat/history")
 def chat_history(request: Request, limit: int = 50):
     """
