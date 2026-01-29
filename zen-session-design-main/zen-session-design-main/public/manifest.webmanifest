@@ -1,0 +1,14 @@
+{
+  "name": "MaÏa",
+  "short_name": "MaÏa",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0b12",
+  "theme_color": "#0b0b12",
+  "description": "Sessions guidées et ambiances relaxantes personnalisées.",
+  "icons": [
+    { "src": "/favicon.ico", "sizes": "48x48", "type": "image/x-icon" },
+    { "src": "/placeholder.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
+

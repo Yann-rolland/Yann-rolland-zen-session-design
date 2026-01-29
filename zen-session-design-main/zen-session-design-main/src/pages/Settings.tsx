@@ -31,17 +31,17 @@ export default function Settings() {
       <h1 className="text-2xl font-bold">Réglages</h1>
 
       <Tabs defaultValue="settings">
-        <TabsList className="w-full grid grid-cols-4">
-          <TabsTrigger value="settings" className="flex-1 justify-center">
+        <TabsList className="w-full flex overflow-x-auto no-scrollbar gap-1 justify-start">
+          <TabsTrigger value="settings" className="shrink-0 min-w-[120px] justify-center">
             Paramètres
           </TabsTrigger>
-          <TabsTrigger value="progress" className="flex-1 justify-center">
+          <TabsTrigger value="progress" className="shrink-0 min-w-[120px] justify-center">
             Progression
           </TabsTrigger>
-          <TabsTrigger value="wellbeing" className="flex-1 justify-center">
+          <TabsTrigger value="wellbeing" className="shrink-0 min-w-[120px] justify-center">
             Bien-être
           </TabsTrigger>
-          <TabsTrigger value="admin" className="flex-1 justify-center">
+          <TabsTrigger value="admin" className="shrink-0 min-w-[120px] justify-center">
             Admin
           </TabsTrigger>
         </TabsList>
