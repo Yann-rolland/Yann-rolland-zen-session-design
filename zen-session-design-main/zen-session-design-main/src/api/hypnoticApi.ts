@@ -465,11 +465,17 @@ export async function adminStorageList(
   return res.json();
 }
 
-export async function adminStorageUpload(adminToken: string, key: string, file: File): Promise<{ ok: boolean; key: string }> {
+export async function adminStorageUpload(
+  adminToken: string,
+  key: string,
+  file: File,
+  opts?: { upsert?: boolean },
+): Promise<{ ok: boolean; key: string }> {
   const base = getApiBase();
   const url = joinUrl(base, `/admin/storage/upload`);
   const fd = new FormData();
   fd.append("key", key);
+  fd.append("upsert", (opts?.upsert ?? true) ? "true" : "false");
   fd.append("file", file);
   const res = await fetch(url, { method: "POST", headers: { "x-admin-token": adminToken }, body: fd });
   if (!res.ok) {

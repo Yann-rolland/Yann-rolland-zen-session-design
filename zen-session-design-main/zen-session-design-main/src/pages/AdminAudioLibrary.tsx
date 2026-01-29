@@ -114,8 +114,38 @@ export default function AdminAudioLibrary() {
     setIsLoading(true);
     setError("");
     try {
-      await adminStorageUpload(token.trim(), key, file);
+      await adminStorageUpload(token.trim(), key, file, { upsert: true });
       toast({ title: "Upload OK", description: key });
+      await loadAll();
+    } catch (e: any) {
+      setError(e?.message || String(e));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const onAddNewToPrefix = async (prefixKey: string, desiredName: string | undefined, file: File) => {
+    if (!token.trim()) return;
+    const safeBase = (desiredName || file.name || "audio")
+      .toString()
+      .trim()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-zA-Z0-9._-]/g, "")
+      .replace(/-+/g, "-")
+      .replace(/^[-.]+|[-.]+$/g, "");
+    const ext = (file.name || "").includes(".") ? "." + String(file.name).split(".").pop() : "";
+    const base = safeBase && !safeBase.endsWith(ext) ? `${safeBase}${ext}` : safeBase || `audio${ext || ".mp3"}`;
+    const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15); // yyyymmddThhmmss
+    const p = (prefixKey || "").trim();
+    const pp = p.endsWith("/") || p === "" ? p : p + "/";
+    const key = `${pp}${base.replace(/^\/+/, "")}`.replaceAll("//", "/");
+    const keyUnique = key.includes(".") ? key.replace(/\.(\w+)$/, `-${stamp}.$1`) : `${key}-${stamp}`;
+
+    setIsLoading(true);
+    setError("");
+    try {
+      await adminStorageUpload(token.trim(), keyUnique, file, { upsert: false });
+      toast({ title: "Ajouté (nouveau)", description: keyUnique });
       await loadAll();
     } catch (e: any) {
       setError(e?.message || String(e));
@@ -428,7 +458,13 @@ export default function AdminAudioLibrary() {
                         <code>{key}</code> · {ok ? "OK" : "manquant"}
                       </div>
                     </div>
-                    <UploadControl disabled={!hasToken || isLoading} onFile={(f) => onUploadToKey(key, f)} />
+                    <div className="flex items-center gap-2">
+                      <UploadControl disabled={!hasToken || isLoading} onFile={(f) => onUploadToKey(key, f)} />
+                      <UploadControl
+                        disabled={!hasToken || isLoading}
+                        onFile={(f) => onAddNewToPrefix("music/user/", undefined, f)}
+                      />
+                    </div>
                   </div>
                   <AssetEditor storageKey={key} kind="music" defaultTitle={defaultTitle} />
                 </div>
@@ -450,7 +486,13 @@ export default function AdminAudioLibrary() {
                         <code>{key}</code> · {ok ? "OK" : "manquant"}
                       </div>
                     </div>
-                    <UploadControl disabled={!hasToken || isLoading} onFile={(f) => onUploadToKey(key, f)} />
+                    <div className="flex items-center gap-2">
+                      <UploadControl disabled={!hasToken || isLoading} onFile={(f) => onUploadToKey(key, f)} />
+                      <UploadControl
+                        disabled={!hasToken || isLoading}
+                        onFile={(f) => onAddNewToPrefix("ambiences/", undefined, f)}
+                      />
+                    </div>
                   </div>
                   <AssetEditor storageKey={key} kind="ambience" defaultTitle={defaultTitle} />
                 </div>
@@ -545,12 +587,7 @@ export default function AdminAudioLibrary() {
             </div>
             <UploadControl
               disabled={!hasToken || isLoading}
-              onFile={(f) => {
-                const safeName = String(f.name || "audio").replace(/\s+/g, "-");
-                const base = (prefix || "").trim();
-                const p = base.endsWith("/") || base === "" ? base : base + "/";
-                onUploadToKey(`${p}${safeName}`.replaceAll("//", "/"), f);
-              }}
+              onFile={(f) => onAddNewToPrefix(prefix || "", undefined, f)}
             />
           </div>
 

@@ -662,6 +662,7 @@ async def admin_delete_audio_assets(request: Request):
 async def admin_storage_upload(
     request: Request,
     key: str = Form(...),
+    upsert: str = Form("true"),
     file: UploadFile = File(...),
 ):
     """
@@ -703,7 +704,8 @@ async def admin_storage_upload(
     if not ct:
         ct = "audio/mpeg" if is_mp3 else ("audio/wav" if is_wav else ("audio/ogg" if is_ogg else "audio/webm"))
 
-    res = upload_object(key_str, data, content_type=ct, upsert=True)
+    upsert_flag = str(upsert or "true").strip().lower() in ("1", "true", "yes", "y", "on")
+    res = upload_object(key_str, data, content_type=ct, upsert=upsert_flag)
     if not res.get("ok"):
         raise HTTPException(status_code=400, detail=res.get("error") or "Upload failed")
     # Best-effort: auto-create metadata row for easier catalog curation (if DB enabled).
