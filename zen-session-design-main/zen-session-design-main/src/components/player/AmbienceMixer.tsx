@@ -614,7 +614,8 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Button variant="secondary" onClick={() => stopAll(true)} disabled={!isPlaying}>
+          {/* Stop should be immediate (no long fade) to match user expectation. */}
+          <Button variant="secondary" onClick={() => stopAll(false)} disabled={!isPlaying}>
             Stop
           </Button>
           <Button onClick={handlePlay} disabled={isPlaying}>
