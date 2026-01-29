@@ -300,9 +300,6 @@ async def debug_gemini_models():
 def cloud_audio_catalog():
     """
     Retourne un petit catalogue d'URLs audio "cloud" (Supabase Storage) si configuré.
-    - Ne renvoie jamais les secrets (service key).
-    - Fournit des URLs signées (bucket privé).
-    Le frontend peut utiliser ces URLs comme fallback/priorité par rapport à /library (local).
     """
     if not storage_enabled():
         return {"enabled": False, "music": {}, "ambiences": {}}
@@ -312,8 +309,7 @@ def cloud_audio_catalog():
 @router.get("/playlists")
 def playlists(request: Request):
     """
-    User-facing themed playlists (requires auth).
-    Built from audio_assets metadata in DB + Supabase Storage signed URLs.
+    Playlists (auth).
     """
     _ = get_current_user(request)
     if not db_enabled():
@@ -324,10 +320,6 @@ def playlists(request: Request):
         tag = str(p.get("tag") or "").strip()
         kind = str(p.get("kind") or "").strip() or None
         try:
-            items = list_audio_assets(kind=kind, tag=tag, limit=1, offset=0)
-            # We don't want to pull all items just to count; do a cheap count query:
-            # Best-effort using LIMIT 1000 then len (still fine for MVP).
-            # If you later have many assets, we'll replace with a COUNT(*) query.
             items_full = list_audio_assets(kind=kind, tag=tag, limit=1000, offset=0)
             count = len(items_full)
         except Exception:
@@ -347,8 +339,7 @@ def playlists(request: Request):
 @router.get("/playlists/{tag}")
 def playlist_items(tag: str, request: Request, limit: int = 50):
     """
-    Returns playlist items for a given theme tag.
-    Includes signed_url for playback (bucket private).
+    Playlist items (auth).
     """
     _ = get_current_user(request)
     if not db_enabled():
@@ -356,7 +347,6 @@ def playlist_items(tag: str, request: Request, limit: int = 50):
     limit = max(1, min(int(limit or 50), 200))
     tag = str(tag or "").strip().lower()
 
-    # Find metadata for the playlist (fallback to tag)
     meta = next((p for p in PLAYLIST_THEMES if str(p.get("tag") or "").lower() == tag), None)
     kind = (str(meta.get("kind")) if isinstance(meta, dict) else "") or None
 
@@ -365,7 +355,6 @@ def playlist_items(tag: str, request: Request, limit: int = 50):
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"DB error: {e}")
 
-    # Attach signed URLs (best effort). If storage isn't enabled, return without URLs.
     expires = int(os.environ.get("SUPABASE_SIGNED_URL_EXPIRES", "3600") or 3600)
     out_items = []
     for it in items:
@@ -386,11 +375,7 @@ def playlist_items(tag: str, request: Request, limit: int = 50):
 @router.get("/audio/library")
 def audio_library(request: Request, limit: int = 200):
     """
-    User-facing audio library (requires auth).
-    Returns curated audio_assets from DB + signed URLs from Supabase Storage.
-
-    This is used by the AmbienceMixer to let users pick from a growing library
-    without overwriting the fixed "expected catalog" slots.
+    Audio library (auth).
     """
     _ = get_current_user(request)
     if not db_enabled():

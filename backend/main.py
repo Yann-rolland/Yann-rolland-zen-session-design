@@ -17,22 +17,17 @@ from db import init_db
 
 IS_FROZEN = bool(getattr(sys, "frozen", False))
 
-# Charge un fichier env local automatiquement (pour éviter de retaper DATABASE_URL / ADMIN_TOKEN).
-# En production, on utilisera plutôt les variables d'environnement du provider.
+# Charge env.local en dev.
 try:
     from dotenv import load_dotenv  # type: ignore
 
     env_dir = Path(__file__).resolve().parent
-    # NB: on charge env.local (non bloqué / non versionné) puis .env si présent
-    # En dev, on veut que le fichier local gagne même si une vieille variable est restée set
-    # dans le terminal. En prod, utilisez les variables d'environnement du provider.
     load_dotenv(env_dir / "env.local", override=True)
     load_dotenv(env_dir / ".env", override=True)
 except Exception:
     pass
 
-# En mode "exe" (PyInstaller), les fichiers packagés sont dans sys._MEIPASS.
-# On garde assets/ et library/ à côté de l'exe (dossier courant) car ce sont des fichiers "writable".
+# Paths
 if IS_FROZEN:
     BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", Path.cwd()))
     FRONTEND_DIST_DIR = BUNDLE_DIR / "frontend_dist"
@@ -50,11 +45,10 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# --- Security hardening (baseline) ---
+# Security headers
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         resp: Response = await call_next(request)
-        # Basic hardening headers (safe for API responses).
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
         resp.headers.setdefault("X-Frame-Options", "DENY")
         resp.headers.setdefault("Referrer-Policy", "no-referrer")
@@ -62,7 +56,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "Permissions-Policy",
             "geolocation=(), microphone=(), camera=(), payment=(), usb=(), interest-cohort=()",
         )
-        # Only set HSTS when served over HTTPS (Render/Vercel). Avoid breaking local dev.
         try:
             if (request.url.scheme or "").lower() == "https":
                 resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
@@ -77,7 +70,6 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
         self.max_bytes = int(max_bytes)
 
     async def dispatch(self, request, call_next):
-        # Best effort: use Content-Length if present.
         try:
             cl = request.headers.get("content-length")
             if cl and int(cl) > self.max_bytes:
@@ -87,13 +79,10 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-# Apply hardening middlewares early.
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestSizeLimitMiddleware, max_bytes=int(os.environ.get("MAX_REQUEST_BYTES", "62914560")))
 
-# Lightweight in-memory rate limiting (single instance). Configure via env:
-# - RATE_LIMIT_RPM: requests per minute per IP per bucket (default: 120)
-# - RATE_LIMIT_ADMIN_RPM: stricter admin routes (default: 60)
+# Simple in-memory rate limiting (single instance).
 class SimpleRateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app):
         super().__init__(app)
@@ -118,8 +107,6 @@ class SimpleRateLimitMiddleware(BaseHTTPMiddleware):
             ip = getattr(getattr(request, "client", None), "host", "") or ""
         except Exception:
             ip = ""
-        # If behind proxy, you can enable trusting X-Forwarded-For via your reverse proxy settings.
-        # We keep it simple and do not trust XFF by default.
         return (bucket, ip or "unknown")
 
     async def dispatch(self, request, call_next):

@@ -283,12 +283,10 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
 
   const stopAll = (withFade = true) => {
     setError("");
-    // Invalide tout "finalize" précédent
     stopTokenRef.current += 1;
     const token = stopTokenRef.current;
     clearStopTimeout();
 
-    // UX: reflète immédiatement l'arrêt (même si le fade continue quelques ms)
     setIsPlaying(false);
 
     const ms = withFade ? Math.max(250, fadeOutMs) : 0;
@@ -297,7 +295,6 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
     rampGain(binauralGainRef.current, 0, ms || 1);
 
     const finalize = () => {
-      // Si l'utilisateur a relancé Play entre-temps, on ne coupe pas la nouvelle lecture.
       if (stopTokenRef.current !== token) return;
       stopNoise();
       stopAmbienceTrack();
@@ -340,8 +337,6 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
     } else {
       const file = musicFileForId(musicTrackId);
       const cloudSrc = cloudCatalog?.music?.[musicTrackId];
-      // In production deployments (Vercel/Render), the backend usually does NOT ship local /library MP3 assets.
-      // If no cloud catalog is configured, avoid trying to play a 404 HTML page as audio (browser shows "no compatible source").
       if (!cloudSrc && import.meta.env.PROD) {
         throw new Error(
           "Catalogue audio non prêt (ou musique manquante). Vérifie VITE_API_BASE et le chargement du catalogue, puis réessaie."
@@ -359,8 +354,6 @@ export function AmbienceMixer({ binauralUrl, initialConfig, defaultOpen = false 
       musicElRef.current.addEventListener("error", () => {
         try {
           const err = musicElRef.current?.error;
-          // HTMLMediaElement error codes:
-          // 1=MEDIA_ERR_ABORTED, 2=NETWORK, 3=DECODE, 4=SRC_NOT_SUPPORTED
           const code = err?.code;
           const ns = (musicElRef.current as any)?.networkState;
           const rs = (musicElRef.current as any)?.readyState;

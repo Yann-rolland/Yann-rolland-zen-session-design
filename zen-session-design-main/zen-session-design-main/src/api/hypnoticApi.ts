@@ -79,12 +79,8 @@ export interface RunDetailResponse {
 function resolveApiBase(): string {
   const envBase = (import.meta as any)?.env?.VITE_API_BASE;
   if (envBase) return String(envBase).replace(/\/+$/, "");
-  // Par défaut, on vise le backend local.
-  // On ne veut PAS utiliser window.location.origin en dev Vite (ex: :8080) car ça donne /generate => 404.
   const fallback = "http://127.0.0.1:8006";
 
-  // In production deployments (Vercel), env vars can sometimes be missing on Preview builds.
-  // If we're running on a vercel.app domain and VITE_API_BASE is empty, default to the Render backend.
   if (typeof window !== "undefined") {
     try {
       const host = String(window.location?.hostname || "").toLowerCase();
@@ -92,26 +88,21 @@ function resolveApiBase(): string {
       if (host.endsWith(".vercel.app")) {
         return "https://bn3-backend-fyjg.onrender.com";
       }
-      // If UI is served by backend (local exe), reuse origin.
       if (origin && (host === "127.0.0.1" || host === "localhost")) {
         const u = new URL(origin);
         if (u.port === "8006" || u.port === "8005" || u.port === "8000") return u.origin;
       }
     } catch {
-      // ignore
     }
   }
 
-  // Si l'UI est servie par le backend (ex: http://127.0.0.1:8006/ui), on peut réutiliser l'origin.
   if (typeof window !== "undefined" && window.location?.origin) {
     try {
       const u = new URL(window.location.origin);
-      // Heuristique: si on est déjà sur un port backend connu, on prend cet origin.
       if (u.hostname === "127.0.0.1" || u.hostname === "localhost") {
         if (u.port === "8006" || u.port === "8005" || u.port === "8000") return u.origin;
       }
     } catch {
-      // ignore
     }
   }
 
