@@ -48,6 +48,7 @@ export interface GenerationResponse {
   tts_provider_used?: string | null;
   tts_cache_hit?: boolean | null;
   tts_error?: string | null;
+  audio_stats?: any | null;
 }
 
 export interface RunsListResponse {
@@ -74,6 +75,7 @@ export interface RunDetailResponse {
   tts_provider_used?: string | null;
   tts_cache_hit?: boolean | null;
   tts_error?: string | null;
+  audio_stats?: any | null;
 }
 
 function resolveApiBase(): string {

@@ -377,6 +377,11 @@ export function SessionPlayer({ className }: SessionPlayerProps) {
             <a className="underline" href={currentSession.audio.voiceUrl} target="_blank" rel="noreferrer">
               ouvrir voix
             </a>
+            {currentSession.audioStats?.voice?.rms_dbfs !== undefined ? (
+              <span title="Diagnostics backend (rms/peak en dBFS)">
+                voix rms {Math.round(currentSession.audioStats.voice.rms_dbfs)} dB · peak {Math.round(currentSession.audioStats.voice.peak_dbfs)} dB
+              </span>
+            ) : null}
           </div>
         </div>
       </GlassCard>

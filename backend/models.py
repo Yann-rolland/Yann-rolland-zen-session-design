@@ -103,6 +103,8 @@ class GenerationResponse(BaseModel):
     tts_provider_used: Optional[str] = None
     tts_cache_hit: Optional[bool] = None
     tts_error: Optional[str] = None
+    # Light diagnostics to debug "no voice": file size/duration/peak/RMS for generated WAVs.
+    audio_stats: Optional[dict] = None
 
     class Config:
         json_schema_extra = {
