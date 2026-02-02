@@ -77,8 +77,7 @@ export interface RunDetailResponse {
 }
 
 function resolveApiBase(): string {
-  const envBase = (import.meta as any)?.env?.VITE_API_BASE;
-  if (envBase) return String(envBase).replace(/\/+$/, "");
+  const envBaseRaw = (import.meta as any)?.env?.VITE_API_BASE;
   const fallback = "http://127.0.0.1:8006";
 
   if (typeof window !== "undefined") {
@@ -88,6 +87,8 @@ function resolveApiBase(): string {
       // In production on Vercel, prefer same-origin proxy to avoid CORS/network/adblock issues:
       // Vercel rewrite: /api/* -> https://bn3-backend-fyjg.onrender.com/*
       if (origin && host.endsWith(".vercel.app")) {
+        // Even if someone set VITE_API_BASE on Vercel by mistake, we still prefer same-origin proxy
+        // to avoid browser-side fetch failures to onrender.com.
         return `${origin}/api`;
       }
       if (host.endsWith(".vercel.app")) {
@@ -101,6 +102,8 @@ function resolveApiBase(): string {
     }
   }
 
+  const envBase = envBaseRaw ? String(envBaseRaw).replace(/\/+$/, "") : "";
+  if (envBase) return envBase;
   if (typeof window !== "undefined" && window.location?.origin) {
     try {
       const u = new URL(window.location.origin);
