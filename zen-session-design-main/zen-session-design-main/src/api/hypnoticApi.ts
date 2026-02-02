@@ -85,6 +85,11 @@ function resolveApiBase(): string {
     try {
       const host = String(window.location?.hostname || "").toLowerCase();
       const origin = String(window.location?.origin || "");
+      // In production on Vercel, prefer same-origin proxy to avoid CORS/network/adblock issues:
+      // Vercel rewrite: /api/* -> https://bn3-backend-fyjg.onrender.com/*
+      if (origin && host.endsWith(".vercel.app")) {
+        return `${origin}/api`;
+      }
       if (host.endsWith(".vercel.app")) {
         return "https://bn3-backend-fyjg.onrender.com";
       }

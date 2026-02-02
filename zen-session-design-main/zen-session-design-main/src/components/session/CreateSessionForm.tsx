@@ -149,7 +149,15 @@ export function CreateSessionForm({ onSessionCreated, className }: CreateSession
 
       onSessionCreated(session);
     } catch (err: any) {
-      setError(err?.message || String(err));
+      const raw = err?.message || String(err);
+      // Improve UX for the most common backend auth failure.
+      if (raw.includes("Missing Authorization bearer token")) {
+        setError(
+          `Tu n'es pas connecté(e). Connecte-toi (Supabase) puis réessaie.\n\nDétail: ${raw}\n\nAPI: ${getApiBase()}`,
+        );
+      } else {
+        setError(raw);
+      }
     } finally {
       setIsGenerating(false);
     }
