@@ -1,6 +1,7 @@
 // Minimal service worker (PWA-ready).
 // Keeps it intentionally simple: cache the app shell and allow offline reload of last visited assets.
-const CACHE_NAME = "maia-pwa-v1";
+// Bump cache name to ensure clients pick up new builds (avoids stale JS after deploy).
+const CACHE_NAME = "maia-pwa-v2";
 const APP_SHELL = ["/", "/index.html", "/manifest.webmanifest", "/favicon.ico"];
 
 self.addEventListener("install", (event) => {
