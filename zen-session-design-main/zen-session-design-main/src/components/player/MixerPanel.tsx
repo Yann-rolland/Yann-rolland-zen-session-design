@@ -14,6 +14,11 @@ interface MixerPanelProps {
   onVolumeChange: (channel: keyof MixerPanelProps['volumes'], value: number) => void;
   disabled?: boolean;
   compact?: boolean;
+  /**
+   * If true, the player is using a pre-mixed single track (mixdown).
+   * In that case only a master volume makes sense.
+   */
+  usingMix?: boolean;
   className?: string;
 }
 
@@ -29,15 +34,20 @@ export function MixerPanel({
   onVolumeChange,
   disabled = false,
   compact = false,
+  usingMix = false,
   className,
 }: MixerPanelProps) {
+  const effectiveChannels = usingMix
+    ? [{ key: 'voice' as const, label: 'Mix (volume)', icon: Mic }]
+    : channels;
+
   return (
     <GlassCard className={cn("space-y-4", className)} padding={compact ? "sm" : "md"}>
       <h3 className="text-sm font-medium text-muted-foreground zen-hide">
         Mixeur Audio
       </h3>
       <div className="space-y-3">
-        {channels.map((channel) => (
+        {effectiveChannels.map((channel) => (
           <VolumeSlider
             key={channel.key}
             value={volumes[channel.key]}

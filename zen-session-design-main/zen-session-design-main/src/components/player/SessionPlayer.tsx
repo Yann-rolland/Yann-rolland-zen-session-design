@@ -366,6 +366,18 @@ export function SessionPlayer({ className }: SessionPlayerProps) {
               </Badge>
             )}
           </div>
+
+          {/* Debug quick links (helps diagnose "no voice") */}
+          <div className="flex flex-wrap gap-3 justify-center text-xs text-muted-foreground zen-hide">
+            {currentSession.audio.mixUrl ? (
+              <a className="underline" href={currentSession.audio.mixUrl} target="_blank" rel="noreferrer">
+                ouvrir mix
+              </a>
+            ) : null}
+            <a className="underline" href={currentSession.audio.voiceUrl} target="_blank" rel="noreferrer">
+              ouvrir voix
+            </a>
+          </div>
         </div>
       </GlassCard>
 
@@ -401,6 +413,7 @@ export function SessionPlayer({ className }: SessionPlayerProps) {
             volumes={playerState.volumes}
             onVolumeChange={handleVolumeChange}
             disabled={!playerState.isPlaying && playerState.currentTime === 0}
+              usingMix={usingMix}
           />
         </CollapsibleContent>
       </Collapsible>
