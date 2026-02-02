@@ -29,7 +29,6 @@ from llm import DEFAULT_SECTIONS, debug_ollama_once
 from llm_gemini import list_gemini_models
 from llm_router import generate_sections
 from mixdown import MixSettings, mixdown_to_wav
-from audio_stats import wav_stats
 from models import (
     ChatRequest,
     ChatResponse,
@@ -1060,8 +1059,6 @@ def get_run(run_id: str, request: Request):
         "tts_provider_used": None,
         "tts_cache_hit": None,
         "tts_error": None,
-        # Audio diagnostics (si présent)
-        "audio_stats": None,
     }
     if (run_dir / "tts_meta.json").exists():
         try:
@@ -1071,11 +1068,6 @@ def get_run(run_id: str, request: Request):
             resp["tts_error"] = tts_meta.get("tts_error")
         except Exception:
             pass
-    if (run_dir / "audio_stats.json").exists():
-        try:
-            resp["audio_stats"] = json.loads((run_dir / "audio_stats.json").read_text(encoding="utf-8"))
-        except Exception:
-            resp["audio_stats"] = None
     return resp
 
 
@@ -1307,19 +1299,6 @@ async def generate(request: GenerationRequest, http_request: Request):
                 (run_dir / "mix_error.txt").write_text(traceback.format_exc(), encoding="utf-8")
                 mix_path = None
 
-        # 5) Audio diagnostics (helps debug "no voice" quickly)
-        audio_stats = {
-            "voice": wav_stats(tts_abs, max_seconds=45.0).as_dict(),
-            "music": wav_stats(music_abs, max_seconds=45.0).as_dict(),
-            "binaural": wav_stats(binaural_abs, max_seconds=45.0).as_dict(),
-            "mix": wav_stats(mix_abs, max_seconds=45.0).as_dict() if mix_path else None,
-        }
-        try:
-            import json as _json
-            (run_dir / "audio_stats.json").write_text(_json.dumps(audio_stats, ensure_ascii=False, indent=2), encoding="utf-8")
-        except Exception:
-            pass
-
         # Copie "latest" (ne conditionne pas la réussite du run)
         try:
             legacy_tts_abs.parent.mkdir(parents=True, exist_ok=True)
@@ -1348,7 +1327,6 @@ async def generate(request: GenerationRequest, http_request: Request):
             tts_provider_used=tts_provider_used,
             tts_cache_hit=cache_hit,
             tts_error=tts_err,
-            audio_stats=audio_stats,
         )
         save_cached(base_dir=base_dir, key=key, data=resp.model_dump())
         # Stocke les paramètres aussi (audit / reproductibilité)

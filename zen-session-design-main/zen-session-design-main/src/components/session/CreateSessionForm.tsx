@@ -121,7 +121,6 @@ export function CreateSessionForm({ onSessionCreated, className }: CreateSession
         ttsProviderUsed: resp.tts_provider_used ?? null,
         ttsCacheHit: resp.tts_cache_hit ?? null,
         ttsError: resp.tts_error ?? null,
-        audioStats: (resp as any).audio_stats ?? null,
         llmProviderUsed: resp.llm_provider_used ?? null,
         llmFallback: resp.llm_fallback ?? null,
         llmError: resp.llm_error ?? null,

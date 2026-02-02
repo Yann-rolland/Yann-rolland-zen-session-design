@@ -66,7 +66,6 @@ export interface Session {
   llmProviderUsed?: string | null;
   llmFallback?: boolean | null;
   llmError?: string | null;
-  audioStats?: any | null;
 }
 
 export interface HistoryEntry {
