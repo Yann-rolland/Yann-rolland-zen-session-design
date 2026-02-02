@@ -60,6 +60,9 @@ backend/env.local.*
 # =========================
 # Generated / runtime data (do not commit)
 # =========================
+# Local docs (keep private / local-only)
+docs/
+
 # Runs, caches, and client state
 assets/runs/
 assets/cache/

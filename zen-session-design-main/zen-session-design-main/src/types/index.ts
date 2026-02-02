@@ -59,6 +59,13 @@ export interface Session {
   audio: SessionAudio;
   status: 'created' | 'generating' | 'ready' | 'playing' | 'paused' | 'completed' | 'error';
   cacheHit?: boolean;
+  // Backend diagnostics (useful when providers fallback)
+  ttsProviderUsed?: string | null;
+  ttsCacheHit?: boolean | null;
+  ttsError?: string | null;
+  llmProviderUsed?: string | null;
+  llmFallback?: boolean | null;
+  llmError?: string | null;
 }
 
 export interface HistoryEntry {

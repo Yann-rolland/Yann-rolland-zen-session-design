@@ -118,6 +118,12 @@ export function CreateSessionForm({ onSessionCreated, className }: CreateSession
         },
         status: "ready",
         cacheHit: Boolean(resp.tts_cache_hit),
+        ttsProviderUsed: resp.tts_provider_used ?? null,
+        ttsCacheHit: resp.tts_cache_hit ?? null,
+        ttsError: resp.tts_error ?? null,
+        llmProviderUsed: resp.llm_provider_used ?? null,
+        llmFallback: resp.llm_fallback ?? null,
+        llmError: resp.llm_error ?? null,
       };
 
       // Initialise le player sur la session créée (durée + volumes)

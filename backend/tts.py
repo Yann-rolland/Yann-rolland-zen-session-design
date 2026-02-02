@@ -110,7 +110,9 @@ def _elevenlabs_tts_to_wav(
 
     headers = {
         "xi-api-key": api_key,
-        "accept": "audio/mpeg",  # l'API peut ignorer, on gère la détection
+        # Ne pas forcer "audio/mpeg": si on demande un output_format PCM/WAV, on veut laisser l'API répondre
+        # dans ce format sans être biaisé par un header Accept trop strict.
+        "accept": "audio/*",
         "content-type": "application/json",
     }
 
@@ -127,9 +129,12 @@ def _elevenlabs_tts_to_wav(
         },
     }
 
-    # On tente plusieurs formats PCM connus; si l'API renvoie finalement du MP3,
+    # On tente plusieurs formats WAV/PCM connus; si l'API renvoie finalement du MP3,
     # on convertit en WAV via ffmpeg si disponible (sinon on renverra une erreur et le backend fallback en local).
     try_formats: Tuple[Tuple[str, int], ...] = (
+        # WAV (si supporté côté API) => pas besoin de ffmpeg, et notre pipeline mixdown reste compatible.
+        ("wav_44100", 44100),
+        ("wav_22050", 22050),
         ("pcm_22050", 22050),
         ("pcm_16000", 16000),
         ("pcm_24000", 24000),
@@ -140,7 +145,19 @@ def _elevenlabs_tts_to_wav(
         for fmt, sr in try_formats:
             try:
                 resp = client.post(url, headers=headers, params={"output_format": fmt}, json=payload)
-                resp.raise_for_status()
+                try:
+                    resp.raise_for_status()
+                except httpx.HTTPStatusError as e:
+                    # Remonte le message JSON de l'API (beaucoup plus actionnable que "400 Bad Request").
+                    detail = None
+                    try:
+                        detail = (e.response.text or "").strip() or None
+                    except Exception:
+                        detail = None
+                    last_err = RuntimeError(
+                        f"HTTP {e.response.status_code} (output_format={fmt}): {detail or str(e)}"
+                    )
+                    continue
                 data = resp.content
                 # Certaines configs renvoient déjà un WAV.
                 if data.startswith(b"RIFF") and b"WAVE" in data[:32]:

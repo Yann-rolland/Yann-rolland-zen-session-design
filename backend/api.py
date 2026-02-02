@@ -236,6 +236,18 @@ def debug_env():
     gemini_key = os.environ.get("GEMINI_API_KEY") or ""
     gemini_key = gemini_key.strip()
 
+    # ElevenLabs (TTS)
+    eleven_key = (os.environ.get("ELEVENLABS_API_KEY") or "").strip()
+    eleven_voice_id = (os.environ.get("ELEVENLABS_VOICE_ID") or "").strip()
+    eleven_base = (os.environ.get("ELEVENLABS_BASE_URL") or "https://api.elevenlabs.io").strip()
+    eleven_model = (os.environ.get("ELEVENLABS_MODEL_ID") or "eleven_multilingual_v2").strip()
+    try:
+        import shutil
+
+        ffmpeg_ok = bool(shutil.which("ffmpeg"))
+    except Exception:
+        ffmpeg_ok = False
+
     return {
         "RENDER_GIT_COMMIT": os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("RENDER_COMMIT") or None,
         "python_executable": getattr(sys, "executable", None),
@@ -256,6 +268,12 @@ def debug_env():
         "SUPABASE_STORAGE_BUCKET_set": bool(supabase_bucket),
         "GEMINI_API_KEY_set": bool(gemini_key),
         "GEMINI_API_KEY_len": len(gemini_key),
+        "ELEVENLABS_API_KEY_set": bool(eleven_key),
+        "ELEVENLABS_API_KEY_len": len(eleven_key),
+        "ELEVENLABS_VOICE_ID_set": bool(eleven_voice_id),
+        "ELEVENLABS_BASE_URL": eleven_base,
+        "ELEVENLABS_MODEL_ID": eleven_model,
+        "ffmpeg_available": ffmpeg_ok,
         "FREESOUND_API_KEY_set": bool(os.environ.get("FREESOUND_API_KEY")),
         "OLLAMA_MODEL": os.environ.get("OLLAMA_MODEL", None),
         "OLLAMA_NUM_GPU": os.environ.get("OLLAMA_NUM_GPU", None),

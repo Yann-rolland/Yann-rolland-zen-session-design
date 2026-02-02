@@ -342,6 +342,21 @@ export function SessionPlayer({ className }: SessionPlayerProps) {
             <Badge variant="provider">
               TTS: {currentSession.config.ttsProvider}
             </Badge>
+            {currentSession.ttsProviderUsed && currentSession.ttsProviderUsed !== currentSession.config.ttsProvider && (
+              <Badge variant="warning" title={currentSession.ttsError || undefined}>
+                TTS utilisé: {currentSession.ttsProviderUsed}
+              </Badge>
+            )}
+            {currentSession.ttsCacheHit !== undefined && currentSession.ttsCacheHit !== null && (
+              <Badge variant={currentSession.ttsCacheHit ? "success" : "muted"}>
+                TTS cache: {currentSession.ttsCacheHit ? "hit" : "miss"}
+              </Badge>
+            )}
+            {currentSession.ttsError ? (
+              <Badge variant="destructive" title={currentSession.ttsError}>
+                TTS erreur
+              </Badge>
+            ) : null}
             <Badge variant="provider">
               Binaural: {currentSession.config.binauralType}
             </Badge>
