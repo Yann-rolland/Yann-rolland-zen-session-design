@@ -91,8 +91,12 @@ export default function TestElevenLabs() {
               id="voice_id"
               value={voiceId}
               onChange={(e) => setVoiceId(e.target.value)}
-              placeholder="Ex: 21m00Tcm4TlvDq8ikWAM"
+              placeholder="Ex: 21m00Tcm4TlvDq8ikWAM (voix publique)"
             />
+            <p className="text-xs text-muted-foreground mt-1">
+              💡 Si vous avez une erreur de limite de voix personnalisées, utilisez une voix publique 
+              (ex: 21m00Tcm4TlvDq8ikWAM) ou laissez vide pour la voix par défaut.
+            </p>
           </div>
 
           <Button onClick={handleTest} disabled={loading} className="w-full">

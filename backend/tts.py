@@ -199,12 +199,62 @@ def _elevenlabs_tts_to_wav(
                 last_err_details = str(e)
                 continue
 
-    # Message d'erreur amélioré
+    # Message d'erreur amélioré avec détection des cas spécifiques
     error_msg = f"ElevenLabs TTS failed: {last_err}"
     if last_err_details:
         error_msg += f" ({last_err_details})"
-    if isinstance(last_err, httpx.HTTPStatusError) and last_err.response.status_code == 400:
-        error_msg += " - Vérifiez que le voice_id est valide et que les paramètres sont corrects."
+    
+    if isinstance(last_err, httpx.HTTPStatusError):
+        status_code = last_err.response.status_code
+        # Détecter les erreurs spécifiques d'ElevenLabs
+        try:
+            error_data = last_err.response.json()
+            detail = error_data.get("detail", {})
+            status = detail.get("status", "")
+            message = detail.get("message", "")
+            
+            if status_code == 401:
+                if status == "detected_unusual_activity":
+                    error_msg = (
+                        f"ElevenLabs a détecté une activité inhabituelle et a désactivé le Free Tier.\n\n"
+                        f"Message: {message}\n\n"
+                        f"Solutions possibles :\n"
+                        f"1. Vérifiez que vous n'utilisez pas de proxy/VPN\n"
+                        f"2. Assurez-vous d'utiliser une seule clé API valide\n"
+                        f"3. Si vous utilisez un plan payant, vérifiez que la clé API correspond au bon compte\n"
+                        f"4. Contactez le support ElevenLabs si vous pensez que c'est une erreur"
+                    )
+                else:
+                    error_msg = (
+                        f"Erreur d'authentification ElevenLabs (401). "
+                        f"Vérifiez que ELEVENLABS_API_KEY est correcte et valide.\n"
+                        f"Détails: {message}"
+                    )
+            elif status_code == 400:
+                if status == "voice_limit_reached":
+                    error_msg = (
+                        f"Limite de voix personnalisées atteinte ({message}). "
+                        f"Solutions :\n"
+                        f"1. Utilisez une voix publique/pré-définie (ex: 21m00Tcm4TlvDq8ikWAM pour Rachel)\n"
+                        f"2. Laissez le champ voice_id vide pour utiliser la voix par défaut (ELEVENLABS_VOICE_ID)\n"
+                        f"3. Mettez à niveau votre abonnement ElevenLabs"
+                    )
+                elif "voice" in message.lower() or "voice_id" in str(error_data).lower():
+                    error_msg += f"\nErreur voix: {message}. Vérifiez que le voice_id est valide ou laissez-le vide pour utiliser la voix par défaut."
+                else:
+                    error_msg += " - Vérifiez que le voice_id est valide et que les paramètres sont corrects."
+            elif status_code == 429:
+                error_msg = (
+                    f"Limite de taux atteinte (429). "
+                    f"Vous avez dépassé votre quota d'utilisation ElevenLabs.\n"
+                    f"Attendez quelques minutes ou mettez à niveau votre plan."
+                )
+        except:
+            if status_code == 401:
+                error_msg += " - Erreur d'authentification. Vérifiez que ELEVENLABS_API_KEY est correcte."
+            elif status_code == 400:
+                error_msg += " - Vérifiez que le voice_id est valide et que les paramètres sont corrects."
+    
     raise RuntimeError(error_msg)
 
 
