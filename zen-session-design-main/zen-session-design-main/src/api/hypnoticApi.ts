@@ -678,13 +678,31 @@ export async function generateSession(payload: GenerationRequest): Promise<Gener
   const base = getApiBase();
   const url = joinUrl(base, "/generate");
   const auth = await authHeader();
-  const doFetch = async () => {
-    return await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...auth },
-      body: JSON.stringify(payload),
-      cache: "no-store",
-    });
+  
+  // Timeout long pour la génération (peut prendre plusieurs minutes avec Render free tier)
+  const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+  
+  const doFetch = async (): Promise<Response> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...auth },
+        body: JSON.stringify(payload),
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      return res;
+    } catch (e: any) {
+      clearTimeout(timeoutId);
+      if (e.name === "AbortError") {
+        throw new Error(`Timeout: la génération prend trop de temps (>${TIMEOUT_MS / 1000}s). Le backend Render (free tier) peut être lent au réveil.`);
+      }
+      throw e;
+    }
   };
 
   let res: Response;
@@ -694,6 +712,9 @@ export async function generateSession(payload: GenerationRequest): Promise<Gener
     // Render free instances can be sleeping; a first request may fail or take time.
     // Retry once after a short delay for better UX.
     const msg = e?.message || String(e);
+    if (msg.includes("Timeout")) {
+      throw e; // Ne pas retry sur timeout
+    }
     await new Promise((r) => setTimeout(r, 1500));
     try {
       res = await doFetch();
