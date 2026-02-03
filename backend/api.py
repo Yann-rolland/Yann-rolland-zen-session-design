@@ -1,4 +1,4 @@
-﻿import os
+import os
 import secrets
 import shutil
 import sys
@@ -61,21 +61,21 @@ router = APIRouter()
 # Tags are stored canonically in EN (e.g., sleep/relax/rain/ocean/fire).
 PLAYLIST_THEMES = [
     {"tag": "sleep", "title": "Sommeil", "subtitle": "Sons doux pour s'endormir", "kind": "ambience"},
-    {"tag": "relax", "title": "D+®tente", "subtitle": "Ambiances calmes et apaisantes", "kind": "ambience"},
-    {"tag": "focus", "title": "Concentration", "subtitle": "Rester centr+®, sans distraction", "kind": "ambience"},
-    {"tag": "meditation", "title": "M+®ditation", "subtitle": "Pr+®sence, respiration, lenteur", "kind": "ambience"},
+    {"tag": "relax", "title": "Détente", "subtitle": "Ambiances calmes et apaisantes", "kind": "ambience"},
+    {"tag": "focus", "title": "Concentration", "subtitle": "Rester centré, sans distraction", "kind": "ambience"},
+    {"tag": "meditation", "title": "Méditation", "subtitle": "Présence, respiration, lenteur", "kind": "ambience"},
     {"tag": "rain", "title": "Pluie", "subtitle": "Pluie, orage, gouttes", "kind": "ambience"},
-    {"tag": "ocean", "title": "Oc+®an", "subtitle": "Vagues, mer, rivage", "kind": "ambience"},
-    {"tag": "fire", "title": "Feu", "subtitle": "Chemin+®e, cr+®pitements", "kind": "ambience"},
-    {"tag": "forest", "title": "For+¬t", "subtitle": "Nature, oiseaux, bois", "kind": "ambience"},
+    {"tag": "ocean", "title": "Océan", "subtitle": "Vagues, mer, rivage", "kind": "ambience"},
+    {"tag": "fire", "title": "Feu", "subtitle": "Cheminée, crépitements", "kind": "ambience"},
+    {"tag": "forest", "title": "Forêt", "subtitle": "Nature, oiseaux, bois", "kind": "ambience"},
     {"tag": "wind", "title": "Vent", "subtitle": "Vent, souffle, air", "kind": "ambience"},
-    {"tag": "zen", "title": "Zen", "subtitle": "S+®lection zen (mix)", "kind": "ambience"},
+    {"tag": "zen", "title": "Zen", "subtitle": "Sélection zen (mix)", "kind": "ambience"},
 ]
 
 def _require_admin(request: Request) -> None:
     """
     Protection simple des endpoints admin:
-    - set ADMIN_TOKEN c+¦t+® backend (env)
+    - set ADMIN_TOKEN côté backend (env)
     - le client doit envoyer header: x-admin-token: <token>
     """
     required = (os.environ.get("ADMIN_TOKEN") or "").strip()
@@ -87,7 +87,7 @@ def _require_admin(request: Request) -> None:
 
 def _redact_secrets(s: str) -> str:
     """
-    Emp+¬che les erreurs renvoy+®es au frontend (llm_error/tts_error/etc) de contenir des secrets
+    Empêche les erreurs renvoyées au frontend (llm_error/tts_error/etc) de contenir des secrets
     (ex: URL avec ?key=...).
     """
     if not s:
@@ -112,7 +112,7 @@ def _pick_binaural_band_and_beat(request: GenerationRequest) -> tuple[str, float
     Notes:
     - Delta: 0.5-4 Hz (sommeil profond)
     - Theta: 4-8 Hz (relax/transe)
-    - Alpha: 8-13 Hz (d+®tente lucide)
+    - Alpha: 8-13 Hz (détente lucide)
     - Beta: 13-30 Hz (concentration)
     - Gamma: >30 Hz (performance/flow)
     """
@@ -161,9 +161,9 @@ async def debug_ollama():
 def debug_env():
     """
     Debug: confirme si les variables d'environnement sont visibles par le process backend.
-    Ne renvoie jamais les valeurs (s+®curit+®), seulement True/False.
+    Ne renvoie jamais les valeurs (sécurité), seulement True/False.
     """
-    # NB: db_enabled() v+®rifie DATABASE_URL + import psycopg.
+    # NB: db_enabled() vérifie DATABASE_URL + import psycopg.
     try:
         import psycopg  # noqa: F401
 
@@ -264,8 +264,8 @@ def debug_env():
 @router.get("/debug/db_ping")
 def debug_db_ping():
     """
-    V+®rifie r+®ellement la connexion Postgres (SELECT 1).
-    Ne renvoie jamais l'URL compl+¿te ni de secrets.
+    Vérifie réellement la connexion Postgres (SELECT 1).
+    Ne renvoie jamais l'URL complète ni de secrets.
     """
     if not db_enabled():
         return {"ok": False, "error": "DB disabled (DATABASE_URL/psycopg missing)"}
@@ -291,7 +291,7 @@ def debug_db_ping():
 @router.get("/debug/gemini/models")
 async def debug_gemini_models():
     """
-    Retourne la liste des mod+¿les Gemini visibles par la cl+® (ne renvoie pas la cl+®).
+    Retourne la liste des modèles Gemini visibles par la clé (ne renvoie pas la clé).
     """
     return await list_gemini_models()
 
@@ -299,7 +299,7 @@ async def debug_gemini_models():
 @router.get("/cloud-audio/catalog")
 def cloud_audio_catalog():
     """
-    Retourne un petit catalogue d'URLs audio "cloud" (Supabase Storage) si configur+®.
+    Retourne un petit catalogue d'URLs audio "cloud" (Supabase Storage) si configuré.
     """
     if not storage_enabled():
         return {"enabled": False, "music": {}, "ambiences": {}}
@@ -621,7 +621,7 @@ async def admin_upsert_audio_assets(request: Request):
       {
         "storage_key": "ambiences/ocean.mp3",
         "kind": "ambience",
-        "title": "Oc+®an doux",
+        "title": "Océan doux",
         "tags": ["ocean", "calm"],
         "source": "freesound",
         "license": "CC0",
@@ -786,9 +786,9 @@ async def admin_storage_delete(request: Request):
 @router.post("/feedback/wellbeing")
 async def feedback_wellbeing(payload: WellBeingFeedback, request: Request):
     """
-    Opt-in: re+ºoit un ressenti utilisateur et le stocke c+¦t+® backend pour am+®lioration produit.
+    Opt-in: reçoit un ressenti utilisateur et le stocke côté backend pour amélioration produit.
     Stockage:
-    - si DATABASE_URL est d+®fini => Postgres (Supabase) table wellbeing_events
+    - si DATABASE_URL est défini => Postgres (Supabase) table wellbeing_events
     - sinon => fichier local assets/feedback/wellbeing.jsonl
     """
     import json
@@ -845,7 +845,7 @@ async def feedback_wellbeing(payload: WellBeingFeedback, request: Request):
 @router.get("/state/{device_id}")
 def get_state(device_id: str):
     """
-    Retourne l'+®tat (progress/settings) d'un device.
+    Retourne l'état (progress/settings) d'un device.
     Stockage:
     - si DATABASE_URL => table client_state
     - sinon => fichier assets/state/<device_id>.json
@@ -877,7 +877,7 @@ def get_state(device_id: str):
 @router.get("/state/user")
 def get_state_user(request: Request):
     """
-    Retourne l'+®tat (progress/settings/history) du user connect+® (Supabase).
+    Retourne l'état (progress/settings/history) du user connecté (Supabase).
     Auth: Authorization: Bearer <supabase_access_token>
     Stockage:
     - si DATABASE_URL => table user_state
@@ -895,7 +895,7 @@ def get_state_user(request: Request):
 @router.post("/state/user")
 async def save_state_user(request: Request):
     """
-    Sauve l'+®tat (progress/settings/history) du user connect+® (Supabase).
+    Sauve l'état (progress/settings/history) du user connecté (Supabase).
     Auth: Authorization: Bearer <supabase_access_token>
     """
     if not db_enabled():
@@ -916,8 +916,8 @@ async def save_state_user(request: Request):
 @router.post("/state/{device_id}")
 async def save_state(device_id: str, request: Request):
     """
-    Sauve l'+®tat (progress/settings) d'un device.
-    Le frontend envoie un JSON libre (on garde la structure c+¦t+® UI).
+    Sauve l'état (progress/settings) d'un device.
+    Le frontend envoie un JSON libre (on garde la structure côté UI).
     """
     import json
     from pathlib import Path
@@ -925,7 +925,7 @@ async def save_state(device_id: str, request: Request):
     try:
         body = await request.json()
     except Exception as e:
-        # Mauvais JSON (souvent un probl+¿me d'+®chappement dans PowerShell/curl)
+        # Mauvais JSON (souvent un problème d'échappement dans PowerShell/curl)
         raise HTTPException(status_code=400, detail=f"Invalid JSON body: {e}")
     state = body.get("state", body)
 
@@ -946,7 +946,7 @@ async def save_state(device_id: str, request: Request):
 @router.get("/runs")
 def list_runs(request: Request, limit: int = 50):
     """
-    Liste les derniers runs (m+®tadonn+®es l+®g+¿res).
+    Liste les derniers runs (métadonnées légères).
     """
     import json
     from pathlib import Path
@@ -992,7 +992,7 @@ def list_runs(request: Request, limit: int = 50):
 @router.get("/runs/{run_id}")
 def get_run(run_id: str, request: Request):
     """
-    Retourne les d+®tails d'un run (texte + paths).
+    Retourne les détails d'un run (texte + paths).
     """
     import json
     from pathlib import Path
@@ -1037,7 +1037,7 @@ def get_run(run_id: str, request: Request):
         "mix_path": f"assets/runs/{run_id}/mix.wav" if (run_dir / "mix.wav").exists() else None,
         "binaural_band_used": binaural_meta.get("binaural_band_used"),
         "binaural_beat_hz_used": binaural_meta.get("binaural_beat_hz_used"),
-        # TTS meta (si pr+®sent)
+        # TTS meta (si présent)
         "tts_provider_used": None,
         "tts_cache_hit": None,
         "tts_error": None,
@@ -1061,8 +1061,8 @@ def export_tts_dataset():
     - voice.wav
     - script.json
     - request.json
-    - binaural.json (si pr+®sent)
-    - tts_meta.json (si pr+®sent)
+    - binaural.json (si présent)
+    - tts_meta.json (si présent)
     """
     import zipfile
     from pathlib import Path
@@ -1121,26 +1121,26 @@ def delete_run(run_id: str, request: Request):
 async def generate(request: GenerationRequest, http_request: Request):
     """
     Pipeline principal :
-    1. G+®n+®rer le texte structur+® via Ollama.
-    2. G+®n+®rer/simuler la voix (WAV).
-    3. G+®n+®rer/simuler la musique d'ambiance.
-    4. G+®n+®rer/simuler un lit binaural (mixable).
+    1. Générer le texte structuré via Ollama.
+    2. Générer/simuler la voix (WAV).
+    3. Générer/simuler la musique d'ambiance.
+    4. Générer/simuler un lit binaural (mixable).
     """
     from pathlib import Path
     base_dir = Path(__file__).resolve().parent.parent
     u = get_current_user(http_request)
 
-    # Cache/fallback: si une g+®n+®ration +®choue, on pourra renvoyer le dernier run OK pour ces param+¿tres.
+    # Cache/fallback: si une génération échoue, on pourra renvoyer le dernier run OK pour ces paramètres.
     payload = request.model_dump()
     # Attach owner (used for /runs filtering); never trust client-supplied user identity
     payload["_user_id"] = u.id
     payload["_user_email"] = u.email
     key = stable_cache_key(payload)
     cached = try_load_cached(base_dir=base_dir, key=key)
-    # Si l'ancien cache venait d'un fallback LLM, on pr+®f+¿re reg+®n+®rer (+®vite de "rester bloqu+®" sur le script par d+®faut)
+    # Si l'ancien cache venait d'un fallback LLM, on préfère regénérer (évite de "rester bloqué" sur le script par défaut)
     if cached and cached.get("llm_fallback"):
         cached = None
-    # Dossier "runs" : un nouveau run par g+®n+®ration (historique complet)
+    # Dossier "runs" : un nouveau run par génération (historique complet)
     runs_dir = base_dir / "assets" / "runs"
     runs_dir.mkdir(parents=True, exist_ok=True)
     run_id = time.strftime("%Y%m%d-%H%M%S") + "-" + key[:6] + "-" + secrets.token_hex(3)
@@ -1201,12 +1201,12 @@ async def generate(request: GenerationRequest, http_request: Request):
         try:
             forced = (getattr(cfg, "forced_generation_text", "") or "").strip()
             if forced:
-                prompt = f"INSTRUCTION ADMIN (prioritaire, +á respecter strictement):\n{forced}\n\n---\n\n{prompt}"
+                prompt = f"INSTRUCTION ADMIN (prioritaire, à respecter strictement):\n{forced}\n\n---\n\n{prompt}"
         except Exception:
             pass
         # Safe: si LLM lent/HS, on ne casse pas /generate (on garde un texte fallback),
-        # mais on expose l'+®tat pour que le frontend puisse l'afficher.
-        # llm_provider peut +¬tre un Enum (LLMProvider.gemini) => on prend .value si dispo pour un affichage clair.
+        # mais on expose l'état pour que le frontend puisse l'afficher.
+        # llm_provider peut être un Enum (LLMProvider.gemini) => on prend .value si dispo pour un affichage clair.
         prov = getattr(request, "llm_provider", "ollama")
         llm_provider_used = getattr(prov, "value", str(prov))
         llm_fallback = False
@@ -1217,12 +1217,12 @@ async def generate(request: GenerationRequest, http_request: Request):
             sections = DEFAULT_SECTIONS
             llm_fallback = True
             llm_error = _redact_secrets(str(e))
-        # M+¬me si l'appel n'a pas lev+®, on peut tomber sur DEFAULT_SECTIONS si parsing a +®chou+® ailleurs.
+        # Même si l'appel n'a pas levé, on peut tomber sur DEFAULT_SECTIONS si parsing a échoué ailleurs.
         if sections is DEFAULT_SECTIONS:
             llm_fallback = True
             llm_error = llm_error or "LLM output not parsable; using DEFAULT_SECTIONS"
 
-        # 1) TTS (avec cache pour +®viter de reconsommer le cr+®dit ElevenLabs)
+        # 1) TTS (avec cache pour éviter de reconsommer le crédit ElevenLabs)
         full_text = " ".join(sections.values())
         prov = getattr(request, "tts_provider", "local")
         tts_provider = getattr(prov, "value", str(prov))
@@ -1281,7 +1281,7 @@ async def generate(request: GenerationRequest, http_request: Request):
                 (run_dir / "mix_error.txt").write_text(traceback.format_exc(), encoding="utf-8")
                 mix_path = None
 
-        # Copie "latest" (ne conditionne pas la r+®ussite du run)
+        # Copie "latest" (ne conditionne pas la réussite du run)
         try:
             legacy_tts_abs.parent.mkdir(parents=True, exist_ok=True)
             legacy_music_abs.parent.mkdir(parents=True, exist_ok=True)
@@ -1311,7 +1311,7 @@ async def generate(request: GenerationRequest, http_request: Request):
             tts_error=tts_err,
         )
         save_cached(base_dir=base_dir, key=key, data=resp.model_dump())
-        # Stocke les param+¿tres aussi (audit / reproductibilit+®)
+        # Stocke les paramètres aussi (audit / reproductibilité)
         import json
         (run_dir / "request.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         (run_dir / "script.json").write_text(json.dumps(sections, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -1331,37 +1331,5 @@ async def generate(request: GenerationRequest, http_request: Request):
         # Fallback : si on a un cache OK pour ce payload, on le renvoie.
         if cached and all(k in cached for k in ["texte", "tts_audio_path", "music_path", "binaural_path"]):
             return GenerationResponse(**cached)
-        raise HTTPException(status_code=500, detail=f"Erreur g+®n+®ration: {exc}")
+        raise HTTPException(status_code=500, detail=f"Erreur génération: {exc}")
 
-    except Exception as e:
-        return {"success": False, "error": _redact_secrets(str(e))}
-@router.post("/test/elevenlabs")
-            output_path=str(output_path),
-            provider="elevenlabs",
-            elevenlabs_voice_id=voice_id,
-            base_dir=base_dir,
-        )
-        
-        if tts_error:
-            return {
-                "success": False,
-                "error": tts_error,
-                "provider_used": provider_used,
-                "cache_hit": cache_hit,
-            }
-        
-        # Retourne le chemin relatif pour le frontend
-        rel_path = f"assets/test_tts/test_{test_id}.wav"
-        
-        return {
-            "success": True,
-            "audio_path": rel_path,
-            "provider_used": provider_used,
-            "cache_hit": cache_hit,
-            "text_length": len(text),
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": _redact_secrets(str(e)),
-        }
