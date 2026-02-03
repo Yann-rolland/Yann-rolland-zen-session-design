@@ -240,8 +240,15 @@ if FRONTEND_DIST_DIR.exists():
 
 @app.get("/")
 def root():
-    # Page d'accueil: redirige vers l'UI
-    return RedirectResponse(url="/ui/")
+    # En production (Render + frontend séparé sur Vercel), le build UI n'est pas forcément présent
+    # dans le container backend. On ne redirige vers /ui/ que si l'UI est effectivement montée.
+    if FRONTEND_DIST_DIR.exists():
+        return RedirectResponse(url="/ui/")
+    return {
+        "status": "ok",
+        "message": "Backend API is running. UI is served on Vercel (not on this Render service).",
+        "health": "/health",
+    }
 
 
 def main():
