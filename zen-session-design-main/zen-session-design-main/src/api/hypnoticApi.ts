@@ -78,13 +78,17 @@ export interface RunDetailResponse {
 
 function resolveApiBase(): string {
   const envBase = (import.meta as any)?.env?.VITE_API_BASE;
-  if (envBase) return String(envBase).replace(/\/+$/, "");
   const fallback = "http://127.0.0.1:8006";
 
   if (typeof window !== "undefined") {
     try {
       const host = String(window.location?.hostname || "").toLowerCase();
       const origin = String(window.location?.origin || "");
+      // On Vercel, prefer same-origin proxy to avoid client-side blocks to onrender.com (adblock/ISP).
+      // Vercel rewrite: /api/* -> https://bn3-backend-fyjg.onrender.com/*
+      if (origin && host.endsWith(".vercel.app")) {
+        return `${origin}/api`;
+      }
       if (host.endsWith(".vercel.app")) {
         return "https://bn3-backend-fyjg.onrender.com";
       }
@@ -96,6 +100,7 @@ function resolveApiBase(): string {
     }
   }
 
+  if (envBase) return String(envBase).replace(/\/+$/, "");
   if (typeof window !== "undefined" && window.location?.origin) {
     try {
       const u = new URL(window.location.origin);
