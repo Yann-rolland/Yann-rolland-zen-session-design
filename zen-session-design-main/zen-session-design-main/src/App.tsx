@@ -16,6 +16,7 @@ import AdminSettings from "./pages/AdminSettings";
 import AdminAudioLibrary from "./pages/AdminAudioLibrary";
 import Chat from "./pages/Chat";
 import Playlists from "./pages/Playlists";
+import TestElevenLabs from "./pages/TestElevenLabs";
 
 const queryClient = new QueryClient();
 
@@ -94,6 +95,14 @@ const App = () => (
                 element={
                   <AppLayout>
                     <AdminAudioLibrary />
+                  </AppLayout>
+                }
+              />
+              <Route
+                path="/test/elevenlabs"
+                element={
+                  <AppLayout>
+                    <TestElevenLabs />
                   </AppLayout>
                 }
               />
