@@ -1333,3 +1333,64 @@ async def generate(request: GenerationRequest, http_request: Request):
             return GenerationResponse(**cached)
         raise HTTPException(status_code=500, detail=f"Erreur génération: {exc}")
 
+
+
+@router.post("/test/elevenlabs")
+async def test_elevenlabs(
+    text: str = Form(...),
+    voice_id: str = Form(""),
+    stability: float = Form(0.55),
+    similarity_boost: float = Form(0.75),
+    style: float = Form(0.15),
+    use_speaker_boost: bool = Form(True),
+    http_request: Request = None,
+):
+    """
+    Endpoint de test pour ElevenLabs TTS uniquement.
+    Ne génère que la voix, pas de musique/binaural/mixdown.
+    Isolé du reste de l'app pour les tests.
+    """
+    from pathlib import Path
+    import time
+    import secrets
+    
+    base_dir = Path(__file__).resolve().parent.parent
+    test_dir = base_dir / "assets" / "test_tts"
+    test_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Génère un nom de fichier unique
+    test_id = time.strftime("%Y%m%d-%H%M%S") + "-" + secrets.token_hex(4)
+    output_path = test_dir / f"test_{test_id}.wav"
+    
+    try:
+        cache_hit, provider_used, tts_error = synthesize_tts_cached(
+            full_text=text,
+            output_path=str(output_path),
+            provider="elevenlabs",
+            elevenlabs_voice_id=voice_id,
+            base_dir=base_dir,
+        )
+        
+        if tts_error:
+            return {
+                "success": False,
+                "error": _redact_secrets(tts_error),
+                "provider_used": provider_used,
+                "cache_hit": cache_hit,
+            }
+        
+        # Retourne le chemin relatif pour le frontend
+        rel_path = f"assets/test_tts/test_{test_id}.wav"
+        
+        return {
+            "success": True,
+            "audio_path": rel_path,
+            "provider_used": provider_used,
+            "cache_hit": cache_hit,
+            "text_length": len(text),
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": _redact_secrets(str(e)),
+        }
