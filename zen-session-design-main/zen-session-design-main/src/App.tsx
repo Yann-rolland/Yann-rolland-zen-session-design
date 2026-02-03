@@ -101,7 +101,7 @@ const App = () => (
               <Route
                 path="/test/elevenlabs"
                 element={
-                  <AppLayout>
+                  <AppLayout requireAuth={false}>
                     <TestElevenLabs />
                   </AppLayout>
                 }
