@@ -1,6 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
-import { Clock, Home, Settings, User, MessageCircle } from "lucide-react";
+import { Clock, Home, Settings, User, MessageCircle, Mic } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 
 const navItems = [
@@ -8,6 +8,7 @@ const navItems = [
   { to: "/chat", icon: MessageCircle, label: "Chat" },
   { to: "/history", icon: Clock, label: "Historique" },
   { to: "/settings", icon: Settings, label: "Réglages" },
+  { to: "/test/elevenlabs", icon: Mic, label: "Test" },
 ];
 
 export function BottomNav() {

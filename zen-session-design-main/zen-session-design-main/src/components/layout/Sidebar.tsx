@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   MessageCircle,
+  Mic,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -29,6 +30,7 @@ const navItems = [
   { to: "/chat", icon: MessageCircle, label: "Chat" },
   { to: "/history", icon: Clock, label: "Historique" },
   { to: "/settings", icon: Settings, label: "Réglages" },
+  { to: "/test/elevenlabs", icon: Mic, label: "Test ElevenLabs" },
 ];
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
