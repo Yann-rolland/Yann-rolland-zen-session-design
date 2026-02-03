@@ -83,19 +83,13 @@ function resolveApiBase(): string {
   if (typeof window !== "undefined") {
     try {
       const host = String(window.location?.hostname || "").toLowerCase();
-      const origin = String(window.location?.origin || "");
-      // In production on Vercel, prefer same-origin proxy to avoid CORS/network/adblock issues:
-      // Vercel rewrite: /api/* -> https://bn3-backend-fyjg.onrender.com/*
-      if (origin && host.endsWith(".vercel.app")) {
-        // Even if someone set VITE_API_BASE on Vercel by mistake, we still prefer same-origin proxy
-        // to avoid browser-side fetch failures to onrender.com.
-        return `${origin}/api`;
-      }
+      // In production on Vercel, call Render directly.
+      // Reason: /generate can be long-running (LLM/TTS) and the Vercel rewrite proxy may time out => 502.
       if (host.endsWith(".vercel.app")) {
         return "https://bn3-backend-fyjg.onrender.com";
       }
-      if (origin && (host === "127.0.0.1" || host === "localhost")) {
-        const u = new URL(origin);
+      if (window.location?.origin && (host === "127.0.0.1" || host === "localhost")) {
+        const u = new URL(window.location.origin);
         if (u.port === "8006" || u.port === "8005" || u.port === "8000") return u.origin;
       }
     } catch {
