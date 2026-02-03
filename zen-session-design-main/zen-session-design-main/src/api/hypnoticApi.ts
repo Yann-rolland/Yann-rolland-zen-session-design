@@ -96,16 +96,6 @@ function resolveApiBase(): string {
     }
   }
 
-  if (typeof window !== "undefined" && window.location?.origin) {
-    try {
-      const u = new URL(window.location.origin);
-      if (u.hostname === "127.0.0.1" || u.hostname === "localhost") {
-        if (u.port === "8006" || u.port === "8005" || u.port === "8000") return u.origin;
-      }
-    } catch {
-    }
-  }
-
   return fallback;
 }
 
