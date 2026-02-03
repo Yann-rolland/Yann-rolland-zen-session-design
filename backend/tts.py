@@ -127,29 +127,32 @@ def _elevenlabs_tts_to_wav(
         },
     }
 
-    # On tente plusieurs formats PCM connus; si l'API renvoie finalement du MP3,
-    # on convertit en WAV via ffmpeg si disponible (sinon on renverra une erreur et le backend fallback en local).
-    try_formats: Tuple[Tuple[str, int], ...] = (
+    # On tente d'abord le format MP3 (par défaut, toujours supporté), puis les formats PCM
+    # Le MP3 nécessite ffmpeg pour conversion, mais c'est plus fiable
+    try_formats: Tuple[Tuple[Optional[str], int], ...] = (
+        (None, 22050),  # MP3 par défaut (pas de output_format)
         ("pcm_22050", 22050),
         ("pcm_16000", 16000),
         ("pcm_24000", 24000),
     )
 
     last_err: Optional[Exception] = None
+    last_err_details: Optional[str] = None
     with httpx.Client(timeout=90) as client:
         for fmt, sr in try_formats:
             try:
-                resp = client.post(url, headers=headers, params={"output_format": fmt}, json=payload)
+                params = {"output_format": fmt} if fmt else {}
+                resp = client.post(url, headers=headers, params=params, json=payload)
                 resp.raise_for_status()
                 data = resp.content
+                
                 # Certaines configs renvoient déjà un WAV.
                 if data.startswith(b"RIFF") and b"WAVE" in data[:32]:
                     ensure_parent(out_path)
                     out_path.write_bytes(data)
                     return
-                # Si c'est un MP3, on ne peut pas le convertir sans ffmpeg => fallback.
+                # Si c'est un MP3, on convertit en WAV via ffmpeg
                 if _looks_like_mp3(data):
-                    # Essaye de convertir en WAV via ffmpeg (si présent)
                     import shutil
                     import subprocess
                     import tempfile
@@ -181,11 +184,28 @@ def _elevenlabs_tts_to_wav(
                 # Sinon on suppose PCM16LE mono.
                 _wrap_pcm_to_wav(data, sr, out_path)
                 return
+            except httpx.HTTPStatusError as e:
+                # Capture les détails de l'erreur HTTP
+                error_text = ""
+                try:
+                    error_text = e.response.text[:500]  # Limite à 500 caractères
+                except:
+                    pass
+                last_err = e
+                last_err_details = f"Status {e.response.status_code}: {error_text}" if error_text else f"Status {e.response.status_code}"
+                continue
             except Exception as e:
                 last_err = e
+                last_err_details = str(e)
                 continue
 
-    raise RuntimeError(f"ElevenLabs TTS failed: {last_err}")
+    # Message d'erreur amélioré
+    error_msg = f"ElevenLabs TTS failed: {last_err}"
+    if last_err_details:
+        error_msg += f" ({last_err_details})"
+    if isinstance(last_err, httpx.HTTPStatusError) and last_err.response.status_code == 400:
+        error_msg += " - Vérifiez que le voice_id est valide et que les paramètres sont corrects."
+    raise RuntimeError(error_msg)
 
 
 def tts_cache_key(full_text: str, provider: str, voice_id: str = "", extra: Optional[dict] = None) -> str:
