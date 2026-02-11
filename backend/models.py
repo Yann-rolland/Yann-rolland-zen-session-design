@@ -76,7 +76,8 @@ class GenerationRequest(BaseModel):
     @validator("duree_minutes")
     def validate_duration(cls, v):  # pylint: disable=no-self-argument
         if v % 5 != 0:
-            raise ValueError("duree_minutes doit être un multiple de 5 pour cadrer la structure.")
+            rounded = round(v / 5) * 5
+            return max(5, min(rounded, 90))
         return v
 
 
