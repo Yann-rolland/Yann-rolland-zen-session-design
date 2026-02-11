@@ -11,3 +11,5 @@ psycopg[binary]==3.3.2
 python-dotenv==1.0.1
 python-multipart==0.0.9
 
+gTTS==2.5.1 
+gTTS==2.5.1 
