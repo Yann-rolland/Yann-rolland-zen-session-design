@@ -1,13 +1,12 @@
+import hashlib
 import math
 import os
-import hashlib
 import wave
 from pathlib import Path
 from typing import Optional, Tuple
 
 import numpy as np
-
-from utils import fade, normalize, save_wave, ensure_parent
+from utils import ensure_parent, fade, normalize, save_wave
 
 
 def _text_to_duration_seconds(text: str, words_per_minute: int = 110) -> float:
@@ -320,6 +319,33 @@ def synthesize_tts_cached(
             synthesize_tts(full_text=full_text, output_path=str(out_path))
             provider_used = "local"
     except Exception as e:
+        # --- C'EST ICI QUE TOUT SE JOUE ---
+        print(f"⚠️ Erreur ElevenLabs ({e}). Basculement sur le TTS local...")
+        error = str(e)
+        
+        # On force le fallback sur pyttsx3 (SAPI Windows) ou Sinus
+        try:
+            synthesize_tts(full_text=full_text, output_path=str(out_path))
+            provider_used = "local_fallback" # On change le nom pour savoir que c'est un secours
+        except Exception as e_inner:
+            print(f"❌ Fallback local échoué : {e_inner}")
+            raise  # Si même le local échoue, on s'arrête
+    """
+    try:
+        if provider == "elevenlabs":
+            _elevenlabs_tts_to_wav(
+                full_text,
+                out_path,
+                voice_id=elevenlabs_voice_id,
+                stability=float(eleven_params["stability"]),
+                similarity_boost=float(eleven_params["similarity_boost"]),
+                style=float(eleven_params["style"]),
+                use_speaker_boost=bool(eleven_params["use_speaker_boost"]),
+            )
+        else:
+            synthesize_tts(full_text=full_text, output_path=str(out_path))
+            provider_used = "local"
+    except Exception as e:
         error = str(e)
         # Fallback ultime: local
         try:
@@ -338,4 +364,5 @@ def synthesize_tts_cached(
             pass
 
     return cache_hit, provider_used, error
+    """
 
